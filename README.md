@@ -143,6 +143,7 @@ All tests are local and use the standard library. `tests/test_p2p.py` runs the o
 | Peer joining | `test_joining_peer_receives_the_keys_it_now_owns` | New owner receives the key and the old owner drops it |
 | Peer leaving | `test_graceful_leave_hands_off_keys_and_relinks_neighbors` | Successor holds the key at once; neighbors are linked to each other |
 | Owner fails | `test_crashed_owner_is_routed_around_and_provider_reregisters` | Ring repairs; the host's refresh moves the record to the new owner |
+| Two consecutive peers fail | `test_ring_survives_two_consecutive_crashes` | Survivors link past both failed peers |
 | Dead or hung next hop | `test_lookup_routes_around_a_dead_successor_before_repair`, `test_lookup_routes_around_a_frozen_successor` | Lookup still reaches the right owner |
 | Host fails | `test_crashed_provider_record_expires` | Lookup returns not found once the TTL passes |
 | Restart on the same address | `test_crashed_peer_can_rejoin_on_its_old_address` | Ring returns to its original order |
