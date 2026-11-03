@@ -5,6 +5,7 @@ import queue
 import socket
 import threading
 
+from peer import RemoteError, discover, parse_address
 from protocol import configure_logging, message, receive, send
 
 
@@ -125,10 +126,20 @@ def main():
     parser.add_argument("--meeting", default="demo-room")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--via", type=parse_address,
+                        help="HOST:PORT of any P2P peer; finds the meeting through the overlay "
+                             "and replaces --host and --port")
     parser.add_argument("--log-dir", default="logs")
     parser.add_argument("--trace-marshalling", action="store_true")
     args = parser.parse_args()
     log = configure_logging(args.name, args.log_dir, args.trace_marshalling)
+    if args.via:
+        try:
+            args.host, args.port = discover(args.meeting, args.via)
+        except (LookupError, OSError, RemoteError) as exc:
+            raise SystemExit(f"Could not discover {args.meeting}: {exc}")
+        log.info("DISCOVERED meeting=%s via=%s:%d coordinator=%s:%d", args.meeting, *args.via,
+                 args.host, args.port)
     user = Participant(args.name, args.meeting, args.host, args.port, log, args.trace_marshalling)
     try:
         print("Joined:", user.connect())

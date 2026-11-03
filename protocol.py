@@ -1,4 +1,4 @@
-"""Milestone 2 wire protocol: newline-delimited UTF-8 JSON over TCP."""
+"""Wire protocol shared by every service: newline-delimited UTF-8 JSON over TCP."""
 
 import json
 import logging
