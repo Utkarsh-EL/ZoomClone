@@ -1,0 +1,71 @@
+2026-11-03 04:49:07,457Z INFO sierra Logging started; trace_marshalling=False
+2026-11-03 04:49:07,461Z INFO sierra PEER_START name=sierra id=13800 address=127.0.0.1:15467
+2026-11-03 04:49:07,461Z INFO sierra JOIN via=127.0.0.1:15464 successor=alpha path=alpha
+2026-11-03 04:49:07,461Z INFO sierra SEND to=alpha type=notify id=7fbadae42fd44c3aab40713a52593f04 body={'peer': {'id': 13800, 'name': 'sierra', 'host': '127.0.0.1', 'port': 15467}}
+Commands: status | lookup NAME | host MEETING | leave | crash
+2026-11-03 04:49:07,806Z INFO sierra PREDECESSOR_CHANGED None -> alpha
+2026-11-03 04:49:08,003Z INFO sierra SUCCESSOR_CHANGED alpha -> xray
+2026-11-03 04:49:08,693Z INFO sierra PREDECESSOR_CHANGED alpha -> ora
+2026-11-03 04:49:08,983Z INFO sierra RECV from=client type=host id=7cf5e9c0c1f84c4cafe6a45653a604e2 body={'meeting': 'demo-room'}
+2026-11-03 04:49:08,983Z INFO sierra FORWARD key=23745 next=xray final=True path=sierra
+2026-11-03 04:49:08,984Z INFO sierra SEND to=xray type=find_owner id=100514fde9a84f298e8ac8bd78215fb2 body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:08,998Z INFO sierra SEND to=xray type=get id=040e171731bb4f129e40192d09ffcdd0 body={'name': 'demo-room'}
+2026-11-03 04:49:09,013Z INFO sierra LOOKUP name=demo-room key=23745 owner=xray hops=1 path=sierra>xray found=False
+2026-11-03 04:49:09,014Z INFO sierra HOST_MEETING meeting=demo-room address=127.0.0.1:15552
+2026-11-03 04:49:09,014Z INFO sierra FORWARD key=23745 next=xray final=True path=sierra
+2026-11-03 04:49:09,015Z INFO sierra SEND to=xray type=find_owner id=4bda9d44667649f7b9352defd0a3748e body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:09,015Z INFO sierra SEND to=xray type=store id=70e0aa8df49848548018ab5ea3143ab2 body={'records': [{'name': 'demo-room', 'value': {'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}, 'ttl': 9.0}]}
+2026-11-03 04:49:09,016Z INFO sierra REGISTER name=demo-room key=23745 owner=xray previous_owner=None path=sierra>xray
+2026-11-03 04:49:09,028Z INFO sierra RECV from=client type=lookup id=60f3c15a18344ec396644a2849be1827 body={'name': 'demo-room'}
+2026-11-03 04:49:09,028Z INFO sierra FORWARD key=23745 next=xray final=True path=sierra
+2026-11-03 04:49:09,044Z INFO sierra SEND to=xray type=find_owner id=80bde7d644bb4396a20f6d6ba5ce8e51 body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:09,059Z INFO sierra SEND to=xray type=get id=9395a204a778405a825ec98a64c06474 body={'name': 'demo-room'}
+2026-11-03 04:49:09,060Z INFO sierra LOOKUP name=demo-room key=23745 owner=xray hops=1 path=sierra>xray found=True
+2026-11-03 04:49:09,091Z INFO sierra RECV from=ora type=find_owner id=53364bb125a24de8b9efb949725f8626 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
+2026-11-03 04:49:09,092Z INFO sierra FORWARD key=23745 next=xray final=True path=alpha>ora>sierra
+2026-11-03 04:49:09,105Z INFO sierra SEND to=xray type=find_owner id=665447f8348e4e479a8611b3573abed5 body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,259Z INFO sierra RECV from=ora type=find_owner id=72387a72917748949dfe259f65715067 body={'key': 27791, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
+2026-11-03 04:49:09,260Z INFO sierra FORWARD key=27791 next=xray final=True path=alpha>ora>sierra
+2026-11-03 04:49:09,274Z INFO sierra SEND to=xray type=find_owner id=dd994dd8594942aab8a34dee86e48327 body={'key': 27791, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,583Z INFO sierra SUCCESSOR_CHANGED xray -> echo
+2026-11-03 04:49:09,673Z INFO sierra RECV from=ora type=find_owner id=6c52937346a64f48ac79bdb00aa45ad6 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
+2026-11-03 04:49:09,673Z INFO sierra FORWARD key=23745 next=echo final=True path=alpha>ora>sierra
+2026-11-03 04:49:09,688Z INFO sierra SEND to=echo type=find_owner id=ef985aed6fb8428c81c4b724795bd74d body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,749Z INFO sierra RECV from=ora type=find_owner id=d1b9eb815d12499d947cf1579c69af6b body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
+2026-11-03 04:49:09,749Z INFO sierra FORWARD key=23745 next=echo final=True path=alpha>ora>sierra
+2026-11-03 04:49:09,763Z INFO sierra SEND to=echo type=find_owner id=fd45982d41804274a2777754df09cd31 body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,794Z INFO sierra CONNECTION remote=127.0.0.1:15630
+2026-11-03 04:49:09,808Z INFO sierra RECEIVE type=join id=901baec22ccf474aad26f675d91f6a5d request_id=None
+2026-11-03 04:49:09,808Z INFO sierra JOIN meeting=demo-room participant=alice
+2026-11-03 04:49:09,808Z INFO sierra SEND type=reply id=9b820c9a2eff47c3b6a37a62c1a1c420 request_id=901baec22ccf474aad26f675d91f6a5d
+2026-11-03 04:49:09,838Z INFO sierra RECV from=ora type=find_owner id=4f50ca989408462085898dc49981ccb8 body={'key': 23745, 'path': ['ora'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,838Z INFO sierra FORWARD key=23745 next=echo final=True path=ora>sierra
+2026-11-03 04:49:09,853Z INFO sierra SEND to=echo type=find_owner id=7830df13a0c84d54b79ea4c1aa993944 body={'key': 23745, 'path': ['ora', 'sierra'], 'ttl': 30, 'final': True}
+2026-11-03 04:49:09,855Z INFO sierra CONNECTION remote=127.0.0.1:15640
+2026-11-03 04:49:09,868Z INFO sierra RECEIVE type=join id=e22d1cc1f5ad49aab2a7540d3bcd830f request_id=None
+2026-11-03 04:49:09,868Z INFO sierra JOIN meeting=demo-room participant=bob
+2026-11-03 04:49:09,868Z INFO sierra SEND type=reply id=5cb64116c238436b8399a2662acb7635 request_id=e22d1cc1f5ad49aab2a7540d3bcd830f
+2026-11-03 04:49:09,869Z INFO sierra RECEIVE type=request id=d9609dc299f041ff8339e5dedce2e008 request_id=None
+2026-11-03 04:49:09,869Z INFO sierra SEND type=reply id=0f0651928ba741fbb74451fd729929cf request_id=d9609dc299f041ff8339e5dedce2e008
+2026-11-03 04:49:09,869Z INFO sierra RECEIVE type=group_send id=850a1f010b024b5ebfa1f79be3907c74 request_id=None
+2026-11-03 04:49:09,869Z INFO sierra SEND type=group_message id=c9b5b2e1010b4b9990eab00057ecff98 request_id=None
+2026-11-03 04:49:09,869Z INFO sierra SEND type=group_message id=c9b5b2e1010b4b9990eab00057ecff98 request_id=None
+2026-11-03 04:49:09,869Z INFO sierra GROUP_SEND meeting=demo-room sender=alice delivered=2
+2026-11-03 04:49:09,870Z INFO sierra SEND type=reply id=ecdc81f0c07940bc9d5c108ee52e881a request_id=850a1f010b024b5ebfa1f79be3907c74
+2026-11-03 04:49:09,886Z INFO sierra RECV from=echo type=peer_left id=b79218a1cc33456e84f159b737183782 body={'peer': {'id': 27791, 'name': 'echo', 'host': '127.0.0.1', 'port': 15571}, 'successors': [{'id': 40128, 'name': 'xray', 'host': '127.0.0.1', 'port': 15477}, {'id': 52303, 'name': 'alpha', 'host': '127.0.0.1', 'port': 15464}, {'id': 811, 'name': 'ora', 'host': '127.0.0.1', 'port': 15472}]}
+2026-11-03 04:49:09,886Z INFO sierra PEER_LEFT name=echo
+2026-11-03 04:49:09,886Z INFO sierra SUCCESSOR_CHANGED echo -> xray
+2026-11-03 04:49:09,961Z INFO sierra RECV from=ora type=find_owner id=ee8c321b4255452197260dae34a8d6e5 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
+2026-11-03 04:49:09,961Z INFO sierra FORWARD key=23745 next=xray final=True path=alpha>ora>sierra
+2026-11-03 04:49:09,975Z INFO sierra SEND to=xray type=find_owner id=53c10f05c2ec48d28b9fafcb744fee1b body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:11,115Z WARNING sierra SUCCESSOR_FAILED peer=xray error=timed out
+2026-11-03 04:49:11,115Z INFO sierra SUCCESSOR_CHANGED xray -> alpha
+2026-11-03 04:49:12,139Z INFO sierra REGISTER name=demo-room key=23745 owner=alpha previous_owner=xray path=sierra>alpha
+2026-11-03 04:49:12,278Z INFO sierra RECEIVE type=group_send id=b7002fb15b574af1926995107e2bcad1 request_id=None
+2026-11-03 04:49:12,278Z INFO sierra SEND type=group_message id=160d5c0db95f48409cbe4c2e66394083 request_id=None
+2026-11-03 04:49:12,278Z INFO sierra SEND type=group_message id=160d5c0db95f48409cbe4c2e66394083 request_id=None
+2026-11-03 04:49:12,278Z INFO sierra GROUP_SEND meeting=demo-room sender=alice delivered=2
+2026-11-03 04:49:12,278Z INFO sierra SEND type=reply id=44c5a09dcdc340d09c087566bde6dd6a request_id=b7002fb15b574af1926995107e2bcad1
+2026-11-03 04:49:12,278Z INFO sierra LEAVE meeting=demo-room participant=alice
+2026-11-03 04:49:12,278Z INFO sierra SEND type=participant_left id=74f10cf6a0614918b1374c5e493dbb7e request_id=None
+2026-11-03 04:49:12,279Z INFO sierra LEAVE meeting=demo-room participant=bob

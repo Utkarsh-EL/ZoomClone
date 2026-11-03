@@ -1,0 +1,60 @@
+2026-11-03 04:49:07,282Z INFO alpha Logging started; trace_marshalling=False
+2026-11-03 04:49:07,284Z INFO alpha PEER_START name=alpha id=52303 address=127.0.0.1:15464
+2026-11-03 04:49:07,284Z INFO alpha RING_CREATED first peer is alpha
+Commands: status | lookup NAME | host MEETING | leave | crash
+2026-11-03 04:49:07,460Z INFO alpha RECV from=client type=find_owner id=d5ac2ef3d06c4b959bb68e1bf5dc554d body={'key': 13800, 'path': [], 'ttl': 32}
+2026-11-03 04:49:07,461Z INFO alpha RECV from=sierra type=notify id=7fbadae42fd44c3aab40713a52593f04 body={'peer': {'id': 13800, 'name': 'sierra', 'host': '127.0.0.1', 'port': 15467}}
+2026-11-03 04:49:07,461Z INFO alpha PREDECESSOR_CHANGED None -> sierra
+2026-11-03 04:49:07,629Z INFO alpha RECV from=client type=find_owner id=76af5867cdcb41aebba251e05ad6f4ae body={'key': 811, 'path': [], 'ttl': 32}
+2026-11-03 04:49:07,631Z INFO alpha RECV from=ora type=notify id=8c111a43f7b94c50a372b8588dfadc6e body={'peer': {'id': 811, 'name': 'ora', 'host': '127.0.0.1', 'port': 15472}}
+2026-11-03 04:49:07,793Z INFO alpha RECV from=client type=find_owner id=ff7c727b272f4ab59106b84507217ba2 body={'key': 40128, 'path': [], 'ttl': 32}
+2026-11-03 04:49:07,794Z INFO alpha RECV from=xray type=notify id=ecf746255ab741a6ad3f1753ffeab62b body={'peer': {'id': 40128, 'name': 'xray', 'host': '127.0.0.1', 'port': 15477}}
+2026-11-03 04:49:07,794Z INFO alpha PREDECESSOR_CHANGED sierra -> xray
+2026-11-03 04:49:07,805Z INFO alpha SUCCESSOR_CHANGED alpha -> sierra
+2026-11-03 04:49:08,861Z INFO alpha SUCCESSOR_CHANGED sierra -> ora
+2026-11-03 04:49:09,061Z INFO alpha RECV from=client type=lookup id=13a592f3e4284679a4ab5e2fbea0ddee body={'name': 'demo-room'}
+2026-11-03 04:49:09,062Z INFO alpha FORWARD key=23745 next=ora final=False path=alpha
+2026-11-03 04:49:09,074Z INFO alpha SEND to=ora type=find_owner id=2abcee4871f44ff5ad49596b67b84836 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,120Z INFO alpha SEND to=xray type=get id=05833d2bbc1840f8a89038b08fb15c80 body={'name': 'demo-room'}
+2026-11-03 04:49:09,136Z INFO alpha LOOKUP name=demo-room key=23745 owner=xray hops=3 path=alpha>ora>sierra>xray found=True
+2026-11-03 04:49:09,205Z INFO alpha RECV from=client type=find_owner id=336cc718c4ac458b9eef352e87911c9a body={'key': 27791, 'path': [], 'ttl': 32}
+2026-11-03 04:49:09,205Z INFO alpha FORWARD key=27791 next=ora final=False path=alpha
+2026-11-03 04:49:09,228Z INFO alpha SEND to=ora type=find_owner id=376c0fcf2286401c891bc78fa1355861 body={'key': 27791, 'path': ['alpha'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,658Z INFO alpha RECV from=client type=lookup id=ab765daab6fe43368092a2440f4df64b body={'name': 'demo-room'}
+2026-11-03 04:49:09,658Z INFO alpha FORWARD key=23745 next=ora final=False path=alpha
+2026-11-03 04:49:09,659Z INFO alpha SEND to=ora type=find_owner id=252152e4fff74261af3bc5636948aad8 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,704Z INFO alpha SEND to=echo type=get id=b6b6d72ac3084b46bfdd6408e31ae0c6 body={'name': 'demo-room'}
+2026-11-03 04:49:09,718Z INFO alpha LOOKUP name=demo-room key=23745 owner=echo hops=3 path=alpha>ora>sierra>echo found=True
+2026-11-03 04:49:09,719Z INFO alpha RECV from=client type=lookup id=fe4341a2d4d24e8da0f007c69dfbf8fe body={'name': 'demo-room'}
+2026-11-03 04:49:09,719Z INFO alpha FORWARD key=23745 next=ora final=False path=alpha
+2026-11-03 04:49:09,733Z INFO alpha SEND to=ora type=find_owner id=966bd5384759434f8779090f8139b017 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,779Z INFO alpha SEND to=echo type=get id=6b26444dc6344481885dcb4de2abbb1e body={'name': 'demo-room'}
+2026-11-03 04:49:09,793Z INFO alpha LOOKUP name=demo-room key=23745 owner=echo hops=3 path=alpha>ora>sierra>echo found=True
+2026-11-03 04:49:09,936Z INFO alpha RECV from=client type=lookup id=24eea52b38324538ba4a5899b7032496 body={'name': 'demo-room'}
+2026-11-03 04:49:09,936Z INFO alpha FORWARD key=23745 next=ora final=False path=alpha
+2026-11-03 04:49:09,937Z INFO alpha SEND to=ora type=find_owner id=a0e254654c094112852da60f477211ee body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
+2026-11-03 04:49:09,976Z INFO alpha SEND to=xray type=get id=bc041fabc39f4f7092ca3517be5efb60 body={'name': 'demo-room'}
+2026-11-03 04:49:09,990Z INFO alpha LOOKUP name=demo-room key=23745 owner=xray hops=3 path=alpha>ora>sierra>xray found=True
+2026-11-03 04:49:11,448Z WARNING alpha PREDECESSOR_FAILED peer=xray error=timed out
+2026-11-03 04:49:12,124Z INFO alpha PREDECESSOR_CHANGED None -> sierra
+2026-11-03 04:49:12,139Z INFO alpha STORE name=demo-room key=23745 ttl=9.0
+2026-11-03 04:49:12,277Z INFO alpha RECV from=client type=lookup id=0ce9e2f6a0f749fdae8ced0931f50c9f body={'name': 'demo-room'}
+2026-11-03 04:49:12,277Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:13,520Z WARNING alpha PREDECESSOR_FAILED peer=sierra error=timed out
+2026-11-03 04:49:14,394Z INFO alpha PREDECESSOR_CHANGED None -> ora
+2026-11-03 04:49:14,440Z INFO alpha RECV from=client type=lookup id=a3cbe84b46f442749e0a912d921f3f76 body={'name': 'demo-room'}
+2026-11-03 04:49:14,440Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:15,465Z INFO alpha RECV from=client type=lookup id=019d83906b94436ab0e7d97e0f067833 body={'name': 'demo-room'}
+2026-11-03 04:49:15,466Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:16,491Z INFO alpha RECV from=client type=lookup id=aae07bdc3e694cce893d9116dd742942 body={'name': 'demo-room'}
+2026-11-03 04:49:16,491Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:17,492Z INFO alpha RECV from=client type=lookup id=b3d08e39bb0b4c45a5eb1834fcea3691 body={'name': 'demo-room'}
+2026-11-03 04:49:17,492Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:18,507Z INFO alpha RECV from=client type=lookup id=81cf33b6c3df4ab988c6879b3d78602c body={'name': 'demo-room'}
+2026-11-03 04:49:18,508Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:19,509Z INFO alpha RECV from=client type=lookup id=0a1e911775a34eb79cd236421c2fbf85 body={'name': 'demo-room'}
+2026-11-03 04:49:19,509Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:20,524Z INFO alpha RECV from=client type=lookup id=195b8d7cf26244df932737f73c67950a body={'name': 'demo-room'}
+2026-11-03 04:49:20,524Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=True
+2026-11-03 04:49:21,525Z INFO alpha RECV from=client type=lookup id=7bc170695d5b462897939bc05fe1c376 body={'name': 'demo-room'}
+2026-11-03 04:49:21,525Z INFO alpha LOOKUP name=demo-room key=23745 owner=alpha hops=0 path=alpha found=False

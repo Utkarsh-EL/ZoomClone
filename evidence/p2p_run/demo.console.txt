@@ -1,0 +1,51 @@
+2026-11-03 04:49:07,221Z INFO demo Logging started; trace_marshalling=False
+2026-11-03 04:49:07,221Z INFO demo ===== STEP 1: four peers start and form a ring =====
+2026-11-03 04:49:08,967Z INFO demo RING peers=4 ora(811) -> sierra(13800) -> xray(40128) -> alpha(52303) -> ora
+2026-11-03 04:49:08,967Z INFO demo CHECK ok: ring holds four peers
+2026-11-03 04:49:08,967Z INFO demo ===== STEP 2: sierra hosts demo-room and registers it in the overlay =====
+2026-11-03 04:49:09,016Z INFO demo HOST_RESULT {'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:09,016Z INFO demo ===== STEP 3: a lookup is routed through the overlay =====
+2026-11-03 04:49:09,060Z INFO demo LOOKUP_RESULT asked=sierra found=True owner=xray hops=1 path=sierra>xray value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:09,136Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=xray hops=3 path=alpha>ora>sierra>xray value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:09,136Z INFO demo CHECK ok: alpha resolves demo-room at xray
+2026-11-03 04:49:09,136Z INFO demo CHECK ok: lookup from the owner's successor crosses three hops
+2026-11-03 04:49:09,136Z INFO demo ===== STEP 4: echo joins and takes over the key =====
+2026-11-03 04:49:09,657Z INFO demo RING peers=5 ora(811) -> sierra(13800) -> echo(27791) -> xray(40128) -> alpha(52303) -> ora
+2026-11-03 04:49:09,658Z INFO demo CHECK ok: ring holds five peers
+2026-11-03 04:49:09,658Z INFO demo CHECK ok: echo received demo-room on join
+2026-11-03 04:49:09,658Z INFO demo CHECK ok: xray handed demo-room off
+2026-11-03 04:49:09,719Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=echo hops=3 path=alpha>ora>sierra>echo value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:09,719Z INFO demo CHECK ok: lookup now resolves at echo
+2026-11-03 04:49:09,719Z INFO demo ===== STEP 5: participants discover the meeting through two different peers and talk =====
+2026-11-03 04:49:09,793Z INFO demo DISCOVERED participant=alice via=alpha coordinator=127.0.0.1:15552
+2026-11-03 04:49:09,855Z INFO demo DISCOVERED participant=bob via=ora coordinator=127.0.0.1:15552
+2026-11-03 04:49:09,869Z INFO demo CHECK ok: both participants reached the same coordinator
+2026-11-03 04:49:09,870Z INFO demo CHECK ok: group message delivered through the discovered coordinator
+2026-11-03 04:49:09,870Z INFO demo ===== STEP 6: echo leaves gracefully and hands its key to its successor =====
+2026-11-03 04:49:09,933Z INFO demo CHECK ok: echo exited cleanly after leaving
+2026-11-03 04:49:09,936Z INFO demo RING peers=4 ora(811) -> sierra(13800) -> xray(40128) -> alpha(52303) -> ora
+2026-11-03 04:49:09,936Z INFO demo CHECK ok: ring holds four peers
+2026-11-03 04:49:09,991Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=xray hops=3 path=alpha>ora>sierra>xray value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:09,991Z INFO demo CHECK ok: xray serves demo-room after the handoff
+2026-11-03 04:49:09,991Z INFO demo ===== STEP 7: xray crashes without warning =====
+2026-11-03 04:49:12,277Z INFO demo RING peers=3 ora(811) -> sierra(13800) -> alpha(52303) -> ora
+2026-11-03 04:49:12,277Z INFO demo CHECK ok: ring repaired itself to three peers
+2026-11-03 04:49:12,277Z INFO demo RING_REPAIRED seconds=2.3
+2026-11-03 04:49:12,278Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:12,278Z INFO demo DISCOVERY_RESTORED seconds=2.3
+2026-11-03 04:49:12,278Z INFO demo CHECK ok: sierra re-registered demo-room at alpha
+2026-11-03 04:49:12,278Z INFO demo CHECK ok: the running meeting was not affected by the overlay failure
+2026-11-03 04:49:12,279Z INFO demo ===== STEP 8: the provider sierra crashes and its record expires =====
+2026-11-03 04:49:14,425Z INFO demo RING peers=2 ora(811) -> alpha(52303) -> ora
+2026-11-03 04:49:14,425Z INFO demo CHECK ok: ring repaired itself to two peers
+2026-11-03 04:49:14,440Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:15,466Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:16,491Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:17,493Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:18,508Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:19,509Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:20,524Z INFO demo LOOKUP_RESULT asked=alpha found=True owner=alpha hops=0 path=alpha value={'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}
+2026-11-03 04:49:21,526Z INFO demo LOOKUP_RESULT asked=alpha found=False owner=alpha hops=0 path=alpha value=None
+2026-11-03 04:49:21,526Z INFO demo RECORD_GONE seconds=9.2
+2026-11-03 04:49:21,526Z INFO demo CHECK ok: a meeting whose host died stops being discoverable
+2026-11-03 04:49:21,526Z INFO demo RESULT: PASS

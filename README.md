@@ -1,174 +1,204 @@
-# CECS 327 — Milestone 2: Video Meeting Communication Prototype
+# CECS 327 Milestone 3: Peer-to-Peer Overlay for Meeting Discovery
 
-This project implements **the communication mechanisms**, rather than media streaming, for a future Zoom-style distributed meeting system. It is based on the uploaded Milestone 2 specification.
+This project adds a peer-to-peer overlay to the video meeting communication prototype from Milestone 2. Peers form a Chord-style ring. A peer can host a meeting, and any participant can find that meeting by asking any peer, with no central directory. Once a participant has the address, it joins using the Milestone 2 TCP protocol unchanged.
 
-## Features
+The prototype coordinates meetings and messages. It does not transmit microphone or camera data.
 
-- **TCP sockets:** one persistent TCP connection per participant; a thread handles each client.
-- **Request–reply:** `request(list_participants)` and `request(meeting_info)` return a correlated `reply`.
-- **Publish–subscribe:** a participant calls `subscribe(topic)`; a `publish(topic, content)` event is forwarded only to subscribers **within the same meeting**.
-- **Group communication:** `group_send(content)` is forwarded to every participant **within the same meeting**, including the sender.
-- **Departure announcements:** when the server detects a participant disconnect, every remaining participant in that meeting automatically receives a `participant_left` message. No topic subscription is needed; interactive clients display an `ANNOUNCEMENT` such as `charlie left the meeting.`
-- **Marshalling/unmarshalling:** Python dictionaries are serialized to UTF-8 JSON and deserialized on arrival. TCP framing uses **one JSON object per newline**.
-- **Logging:** each process emits UTC timestamps, message identifiers, send/receive messages, and, when enabled, dictionary/byte representations of marshalling operations.
-- **Independent processes:** `demo.py` launches one server and three participant processes (Alice, Bob, Charlie).
+## What the overlay does
 
-### Architecture
+| Assignment requirement | Where it is implemented |
+| --- | --- |
+| Peer node | `peer.py`, class `Peer`: one OS process per peer |
+| Join and leave | `Peer.start`, `Peer.leave` (key handoff and neighbor relinking) |
+| Lookup mechanism | `Peer.lookup`, `on_find_owner`: request forwarded hop by hop around the ring |
+| Overlay structure | Chord-style ring with SHA-1 IDs and a successor list of 3 |
+| Data or service discovery | Meeting name maps to the coordinator's `host:port`, held by the peer that owns the key |
+| Failure handling | Failed hops are routed around, stabilization repairs the ring, records are soft state |
 
 ```text
-          Bob (client process) ---------\
-                                        \
-          Charlie (client process) ------> TCP Meeting Coordinator (server process)
-                                        /   ├── Meeting membership / request–reply
-          Alice (client process) -------/    ├── Topic subscription & event forwarding
-                                             └── Group messaging / fan-out
+                 ora (811)
+              /             \
+     alpha (52303)        sierra (13800)  hosts demo-room
+           |                     |
+           |                     v
+      xray (40128)  <---  echo (27791)  owns key 23745 (demo-room)
+
+Arrows run clockwise: every peer knows its next 3 successors and its predecessor.
 ```
 
-This is a *centralized communication broker with independently running network clients*. This fulfills Milestone 2 communication requirements but **is not** decentralized coordination, a consensus algorithm, leader election, persistent replication, automatic server failover, or audio/video streaming. Those are outside the listed Milestone 2 requirements.
+- **Ring position:** `SHA-1(name) mod 2^16`. Names give the same ring on every run, so the demo and these diagrams always match.
+- **Key ownership:** a resource named `demo-room` has key `SHA-1("demo-room") mod 2^16` and belongs to the first peer clockwise from that key.
+- **Records are soft state:** the hosting peer re-registers every `ttl / 3` seconds (3 s by default). The record expires after `ttl` seconds (9 s) without a refresh.
 
 ## Required software
 
-- Python 3.9+ (standard library only)
-- Localhost networking for the automatic demo, or TCP network access between machines for manual use
-- No packages to install; no `requirements.txt` dependencies
+- Python 3.9 or newer. Standard library only.
+- TCP networking on localhost. Separate computers also work (see below).
 
-Check Python: `python --version` (`python3 --version` on systems where appropriate).
+Check Python with `python --version` (`python3 --version` on some systems).
 
-## One-command demo
+## Install dependencies
 
-From the directory containing `demo.py`:
-
-```sh
-python demo.py
-```
-
-The program starts **four OS processes**, waits for Bob and Charlie to join and subscribe, and then runs Alice's scenario. It checks that all three participants complete successfully.
-
-Demo logs and results are saved in:
-
-```text
-evidence/demo_run/demo_transcript.txt
- evidence/demo_run/server.log
- evidence/demo_run/alice.log
- evidence/demo_run/bob.log
- evidence/demo_run/charlie.log
- evidence/demo_run/*.console.txt
-```
-
-The transcript includes both `MARSHAL object=... -> wire_bytes=...` and `UNMARSHAL wire_bytes=... -> object=...` trace lines to help inspect data **before** and **after** marshalling. The demo overwrites only previously generated demo files in `evidence/demo_run` each time.
-
-**Expected behavior:** Alice requests a participant list, publishes a meeting notification, and sends a group chat message. Bob and Charlie independently receive the published event and group message. The `RESULT: PASS` line appears in all three client outputs. Subscriber delivery count is 2; group delivery count is 3 (includes Alice).
-
-## Manual demo: start each service separately
-
-Open **four terminals** in the project directory.
-
-Terminal 1 (server):
+There are none to install. Clone the repository and switch to the `milestone-3` branch:
 
 ```sh
-python server.py --host 127.0.0.1 --port 5000 --trace-marshalling
+git clone https://github.com/Utkarsh-EL/ZoomClone.git
+cd ZoomClone
+git switch milestone-3
 ```
 
-Terminals 2–4 (participants):
+## Run the demo (one command)
 
 ```sh
-python client.py --name alice   --meeting demo-room --port 5000 --trace-marshalling
-python client.py --name bob     --meeting demo-room --port 5000 --trace-marshalling
-python client.py --name charlie --meeting demo-room --port 5000 --trace-marshalling
+python p2p_demo.py
 ```
 
-Enter the following commands at the `bob>` and `charlie>` prompts **first**:
+It takes about 15 seconds and prints `RESULT: PASS` at the end, exiting with code 0. The demo starts every peer as a separate OS process and checks each step:
 
-```text
-subscribe meeting.announcements
-```
+1. `alpha`, `sierra`, `ora` and `xray` start and form a ring of four.
+2. `sierra` hosts `demo-room` and registers it through the overlay.
+3. A lookup from the owner's successor crosses three hops.
+4. `echo` joins and takes over the key from `xray`.
+5. `alice` and `bob` discover the meeting through two different peers, connect, and exchange a message.
+6. `echo` leaves gracefully and hands the key back to `xray`.
+7. `xray` is killed. The ring repairs itself, `sierra` re-registers the meeting at `alpha`, and the running meeting keeps working.
+8. `sierra` is killed. Its record expires and the meeting stops being discoverable.
 
-At `alice>`:
+Output is saved in `evidence/p2p_run/`:
 
-```text
-members
-info
-publish meeting.announcements The meeting begins now
-say Hello to the entire group
-```
+| File | Contents |
+| --- | --- |
+| `demo_transcript.txt` | Every process's log merged in timestamp order |
+| `<peer>.console.txt` | One peer's own log |
+| `demo.console.txt` | Demo steps, lookup results and checks |
 
-Watch the Bob/Charlie console logs for `DELIVERED event` and `DELIVERED group_message`. Type `quit` in each client; press Ctrl+C at the server.
+A run committed to the repository is already there for reference. Running the demo replaces those files.
 
-### Run on separate computers (same LAN)
+## Start each service by hand
 
-On server machine:
+Open one terminal per peer in the project directory. Peers read commands from the terminal while logging to it.
 
 ```sh
-python server.py --host 0.0.0.0 --port 5000
+python peer.py --name alpha  --port 7001
+python peer.py --name sierra --port 7002 --bootstrap 127.0.0.1:7001
+python peer.py --name ora    --port 7003 --bootstrap 127.0.0.1:7001
+python peer.py --name xray   --port 7004 --bootstrap 127.0.0.1:7001
 ```
 
-On each client machine, replace `192.168.1.10` with the server computer's reachable LAN IPv4 address:
+The first peer has no `--bootstrap`, so it creates the ring. Any running peer works as a bootstrap. Add `--verbose` to also log periodic maintenance traffic, which is hidden by default so that lookups and membership changes stay readable.
+
+Peer commands:
+
+| Command | Effect |
+| --- | --- |
+| `status` | Print this peer's ID, neighbors, stored records and published resources |
+| `host MEETING` | Start a meeting coordinator on this peer and register it in the overlay |
+| `lookup NAME` | Route a lookup through the ring and print the owner, path and value |
+| `leave` | Leave gracefully: hand off keys, relink neighbors, exit |
+| `crash` | Exit immediately with no handoff, as a failed process would |
+
+Ctrl+C also leaves gracefully.
+
+Try this order:
+
+1. At `sierra`, type `host demo-room`.
+2. At `alpha`, type `lookup demo-room`. The path is `alpha>ora>sierra>xray`.
+3. In a new terminal, start a fifth peer: `python peer.py --name echo --port 7005 --bootstrap 127.0.0.1:7001`. Its log shows `JOIN`, and the `xray` log shows `KEYS_TRANSFER`.
+4. Join the meeting through any peer, in one new terminal per participant:
+
+   ```sh
+   python client.py --name alice --meeting demo-room --via 127.0.0.1:7003
+   python client.py --name bob   --meeting demo-room --via 127.0.0.1:7001
+   ```
+
+   Then use the client commands `members`, `say Hello`, `quit`.
+5. At `echo`, type `leave`. The `xray` log shows `STORE` as the key returns.
+6. At `xray`, type `crash`. Within about 3 seconds, `sierra` and `alpha` log the failure and `sierra` logs `REGISTER ... owner=alpha`.
+
+### Separate computers
+
+Bind each peer to its LAN address, which is also the address it advertises to other peers:
 
 ```sh
-python client.py --name bob --host 192.168.1.10 --port 5000 --meeting demo-room
+python peer.py --name alpha  --host 192.168.1.10 --port 7001
+python peer.py --name sierra --host 192.168.1.11 --port 7001 --bootstrap 192.168.1.10:7001
 ```
 
-Permit **TCP port 5000** through the server host firewall if needed. All peers must reach the server. Do **not** expose this prototype to the public Internet: it provides no encryption or authentication.
+Allow the peer port and the coordinator's ephemeral ports through the firewall. Do not expose this prototype to the public Internet: it has no encryption or authentication, and any host that can reach a peer can tell it to leave.
 
-## Message protocol
-
-Every message has a `type`, generated `id`, UTC `timestamp`, and a `body`; requests that receive replies carry a matching `request_id` in the reply.
-
-Example (illustrative, IDs/timestamps change every run):
-
-```json
-{"type":"request","id":"abc123","timestamp":"2026-10-13T20:00:00.000+00:00","body":{"operation":"list_participants"}}
-```
-
-```json
-{"type":"reply","id":"def456","timestamp":"2026-10-13T20:00:00.100+00:00","request_id":"abc123","body":{"status":"ok","operation":"list_participants","meeting":"demo-room","participants":["alice","bob","charlie"]}}
-```
-
-Publish format: `{"type":"publish", "body":{"topic":"meeting.announcements","content":"..."}, ...}`. The broker routes an `event` with `sender` and `meeting` fields.
-
-Group format: `{"type":"group_send", "body":{"content":"..."}, ...}`. The broker routes a `group_message` with `sender` and `meeting` fields.
-
-Departure format: `{"type":"participant_left", "sender":"server", "meeting":"demo-room", "body":{"username":"charlie","content":"charlie left the meeting."}, ...}`. The server removes membership and subscriptions before broadcasting this notification, once per disconnected session, to the remaining meeting members. This covers `quit`, closed terminals, and abrupt process exits once TCP reports the disconnection. There is no heartbeat, so a silent network outage may take longer to detect. Reusable `Participant` clients can read these notifications from `inbox` or use `wait_for`.
-
-**Socket transport framing:** Every encoded JSON packet ends in `\n`; the receiver calls `readline` and parses exactly one packet. Maximum 65,536 wire bytes per packet; Unicode is supported.
-
-## Automated tests
-
-From the project root:
+## Reproduce the test cases
 
 ```sh
 python -m unittest discover -s tests -v
 ```
 
-Tests cover JSON round-trip, Unicode, invalid/truncated data, oversize packets, request–reply, fan-out to **two** subscribers, group delivery to **three** participants, meeting isolation, invalid requests, and duplicate usernames.
-Departure tests also verify automatic notification to all remaining members, meeting isolation, subscription cleanup, duplicate cleanup suppression, and abrupt client process exit.
+All tests are local and use the standard library. `tests/test_p2p.py` runs the overlay in-process with a short stabilization interval.
 
-To verify communication across separate server and client processes, run the one-command demo:
+| Scenario | Test in `tests/test_p2p.py` | Expected result |
+| --- | --- | --- |
+| Ring interval math, including wraparound | `RingMathTests` | Correct membership on both sides of ID 0 |
+| At least four peers form a ring | `test_four_peers_form_one_ordered_ring` | Peers ordered by ID with correct successor lists |
+| Lookup routed through the overlay | `test_lookup_is_routed_hop_by_hop_to_the_owner` | Path visits each peer in ring order and ends at the owner |
+| Resource discovered through peers | `test_every_peer_resolves_a_meeting_and_clients_can_use_it` | Every peer resolves the address; 4 clients join and exchange a message |
+| Peer joining | `test_joining_peer_receives_the_keys_it_now_owns` | New owner receives the key and the old owner drops it |
+| Peer leaving | `test_graceful_leave_hands_off_keys_and_relinks_neighbors` | Successor holds the key at once; neighbors are linked to each other |
+| Owner fails | `test_crashed_owner_is_routed_around_and_provider_reregisters` | Ring repairs; the host's refresh moves the record to the new owner |
+| Dead or hung next hop | `test_lookup_routes_around_a_dead_successor_before_repair`, `test_lookup_routes_around_a_frozen_successor` | Lookup still reaches the right owner |
+| Host fails | `test_crashed_provider_record_expires` | Lookup returns not found once the TTL passes |
+| Restart on the same address | `test_crashed_peer_can_rejoin_on_its_old_address` | Ring returns to its original order |
+| Invalid input | `ValidationTests` | Error replies, refused duplicate IDs, and the peer keeps serving |
+
+The Milestone 2 suites (`tests/test_protocol.py`, `tests/test_integration.py`) still run in the same command.
+
+## Peer protocol
+
+Peers use the Milestone 2 wire format from `protocol.py`: one UTF-8 JSON object per line, at most 65,536 bytes, with a `type`, `id`, `timestamp` and `body`. Each request uses one short-lived TCP connection and gets one `reply` or `error` carrying a matching `request_id`.
+
+```json
+{"type":"find_owner","id":"49fe9d0e...","timestamp":"2026-11-03T04:40:00.736+00:00","sender":"sierra","quiet":false,"body":{"key":23745,"path":["alpha","ora","sierra"],"ttl":29,"final":true}}
+```
+
+| Type | Purpose |
+| --- | --- |
+| `find_owner` | Forwarded around the ring until it reaches the peer responsible for `key` |
+| `ping`, `neighbors`, `notify` | Failure detection and stabilization |
+| `peer_left` | Graceful leave notice to both neighbors |
+| `store`, `get`, `delete` | Record operations at the owner |
+| `lookup`, `host`, `leave`, `status` | Requests from a terminal, a client or the demo |
+
+Log lines worth watching: `JOIN`, `FORWARD`, `LOOKUP`, `KEYS_TRANSFER`, `STORE`, `REGISTER`, `SUCCESSOR_CHANGED`, `PREDECESSOR_CHANGED`, `SUCCESSOR_FAILED`, `PREDECESSOR_FAILED`, `PEER_LEFT`, `LEAVE_DONE`, `RECORD_EXPIRED`. `SEND` and `RECV` lines carry the same `id` on both sides of a message.
+
+## Milestone 2 services
+
+The meeting coordinator and clients still work without the overlay:
 
 ```sh
 python demo.py
+python server.py --host 127.0.0.1 --port 5000 --trace-marshalling
+python client.py --name alice --meeting demo-room --port 5000 --trace-marshalling
 ```
+
+Client commands are `members`, `info`, `subscribe TOPIC`, `publish TOPIC TEXT`, `say TEXT` and `quit`. `python demo.py` writes its evidence to `evidence/demo_run/`.
 
 ## Source files
 
 | File | Responsibility |
 | --- | --- |
-| `protocol.py` | Packet creation, JSON encoding/decoding, framing, UTC logging |
-| `server.py` | TCP listener, membership, subscription registry, request routing, publish fan-out, group fan-out |
-| `client.py` | Reusable participant API, asynchronous receiver, correlated request/reply, interactive CLI |
-| `demo_node.py` | Deterministic publisher/subscriber scenario executed by one client process |
-| `demo.py` | Launches four processes, synchronizes demo startup, saves logs and results |
-| `tests/` | Protocol and socket integration tests |
-| `Milestone2_Report.pdf` | Communication design and real test/log evidence |
+| `peer.py` | Peer node: ring membership, stabilization, routing, records, meeting hosting, command line |
+| `p2p_demo.py` | Multi-process overlay scenario with checks; saves evidence |
+| `protocol.py` | Packet creation, JSON encoding and decoding, framing, UTC logging |
+| `server.py` | Meeting coordinator: membership, subscriptions, request routing, publish and group fan-out |
+| `client.py` | Participant API and command line; `--via` finds the meeting through a peer |
+| `demo.py`, `demo_node.py` | Milestone 2 multi-process scenario |
+| `tests/` | Protocol, socket integration and overlay tests |
 
-## Demo walkthrough
+## Known limitations
 
-1. Review the architecture and the PDF design report.
-2. Run `python demo.py` and check for `RESULT: PASS` outputs.
-3. Open `evidence/demo_run/demo_transcript.txt` and locate `REQUEST_REPLY`, `PUBLISH_REPLY`, two `PUBSUB_RECEIVED` lines, and two `GROUP_RECEIVED` lines.
-4. Inspect `MARSHAL object=... -> wire_bytes=b'...\\n'` and `UNMARSHAL wire_bytes=... -> object=...` logs.
-5. Explore the protocol, server, client, and demo code files.
-
-## Known limitations and security assumptions
-
-The server is an in-memory **single point of failure**; messages are not persisted or retransmitted after disconnection. A successful delivery count means the TCP write succeeded, **not** that an application processed the message. `publish` is routed only to active subscribers; there is no replay. A participant can connect without authentication, and traffic is unencrypted. Separate-process demo works locally; for WAN use, proper authentication, TLS, NAT traversal, reliable media streaming, replication, and failover require additional design. The interface currently coordinates participants and messages but does **not** transmit microphone or camera data.
+- **Routing is linear.** Lookups follow successors one hop at a time, so a lookup costs O(N) hops. Chord finger tables would reduce this to O(log N) and are not implemented.
+- **Discovery can pause after a failure.** Records have one copy, at the owner. If the owner fails, the record is missing until the host's next refresh (at most 3 s by default).
+- **A dead host's address can linger.** Until the TTL passes (9 s by default), a lookup can return the address of a host that has failed, and connecting to it is refused.
+- **Lookups during churn can miss.** A lookup can reach a peer before a new neighbor is fully linked. Running it again after stabilization (about 1 s) resolves it.
+- **Simultaneous failures.** The ring survives up to 2 consecutive failed peers between stabilization rounds. Losing all 3 listed successors at once can split the ring until a peer rejoins.
+- **Hosts are not replicated.** Meeting state lives on the hosting peer. If that peer fails, the meeting ends for its participants.
+- **No security.** Traffic is unencrypted and unauthenticated, so a malicious peer could return false records or claim any ring position.
+- **Duplicate meeting hosts.** `host` refuses a meeting name that resolves. Two peers hosting the same new name in the same instant could still race.

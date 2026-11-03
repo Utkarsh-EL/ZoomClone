@@ -1,0 +1,27 @@
+2026-11-03 04:49:07,790Z INFO xray Logging started; trace_marshalling=False
+2026-11-03 04:49:07,793Z INFO xray PEER_START name=xray id=40128 address=127.0.0.1:15477
+2026-11-03 04:49:07,793Z INFO xray JOIN via=127.0.0.1:15464 successor=alpha path=alpha
+2026-11-03 04:49:07,793Z INFO xray SEND to=alpha type=notify id=ecf746255ab741a6ad3f1753ffeab62b body={'peer': {'id': 40128, 'name': 'xray', 'host': '127.0.0.1', 'port': 15477}}
+Commands: status | lookup NAME | host MEETING | leave | crash
+2026-11-03 04:49:08,004Z INFO xray PREDECESSOR_CHANGED None -> sierra
+2026-11-03 04:49:08,997Z INFO xray RECV from=sierra type=find_owner id=100514fde9a84f298e8ac8bd78215fb2 body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:09,012Z INFO xray RECV from=sierra type=get id=040e171731bb4f129e40192d09ffcdd0 body={'name': 'demo-room'}
+2026-11-03 04:49:09,015Z INFO xray RECV from=sierra type=find_owner id=4bda9d44667649f7b9352defd0a3748e body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:09,016Z INFO xray RECV from=sierra type=store id=70e0aa8df49848548018ab5ea3143ab2 body={'records': [{'name': 'demo-room', 'value': {'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}, 'ttl': 9.0}]}
+2026-11-03 04:49:09,016Z INFO xray STORE name=demo-room key=23745 ttl=9.0
+2026-11-03 04:49:09,059Z INFO xray RECV from=sierra type=find_owner id=80bde7d644bb4396a20f6d6ba5ce8e51 body={'key': 23745, 'path': ['sierra'], 'ttl': 31, 'final': True}
+2026-11-03 04:49:09,060Z INFO xray RECV from=sierra type=get id=9395a204a778405a825ec98a64c06474 body={'name': 'demo-room'}
+2026-11-03 04:49:09,120Z INFO xray RECV from=sierra type=find_owner id=665447f8348e4e479a8611b3573abed5 body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,135Z INFO xray RECV from=alpha type=get id=05833d2bbc1840f8a89038b08fb15c80 body={'name': 'demo-room'}
+2026-11-03 04:49:09,290Z INFO xray RECV from=sierra type=find_owner id=dd994dd8594942aab8a34dee86e48327 body={'key': 27791, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,305Z INFO xray RECV from=echo type=notify id=cb2dbe303e0449f1b9cf58523c2367f7 body={'peer': {'id': 27791, 'name': 'echo', 'host': '127.0.0.1', 'port': 15571}}
+2026-11-03 04:49:09,306Z INFO xray PREDECESSOR_CHANGED sierra -> echo
+2026-11-03 04:49:09,306Z INFO xray SEND to=echo type=store id=f174ececf0fa478e82475d12430f7ef3 body={'records': [{'name': 'demo-room', 'value': {'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}, 'ttl': 8.710107199993217}]}
+2026-11-03 04:49:09,321Z INFO xray KEYS_TRANSFER to=echo names=['demo-room']
+2026-11-03 04:49:09,884Z INFO xray RECV from=echo type=store id=80ba61d8c2294a73bc3c6fe496bcba7c body={'records': [{'name': 'demo-room', 'value': {'host': '127.0.0.1', 'port': 15552, 'peer': 'sierra'}, 'ttl': 8.147136499988846}]}
+2026-11-03 04:49:09,885Z INFO xray STORE name=demo-room key=23745 ttl=8.1
+2026-11-03 04:49:09,885Z INFO xray RECV from=echo type=peer_left id=c107fa10967343958d3a121834e71a7e body={'peer': {'id': 27791, 'name': 'echo', 'host': '127.0.0.1', 'port': 15571}, 'predecessor': {'id': 13800, 'name': 'sierra', 'host': '127.0.0.1', 'port': 15467}}
+2026-11-03 04:49:09,885Z INFO xray PEER_LEFT name=echo
+2026-11-03 04:49:09,885Z INFO xray PREDECESSOR_CHANGED echo -> sierra
+2026-11-03 04:49:09,976Z INFO xray RECV from=sierra type=find_owner id=53c10f05c2ec48d28b9fafcb744fee1b body={'key': 23745, 'path': ['alpha', 'ora', 'sierra'], 'ttl': 29, 'final': True}
+2026-11-03 04:49:09,990Z INFO xray RECV from=alpha type=get id=bc041fabc39f4f7092ca3517be5efb60 body={'name': 'demo-room'}
