@@ -1,31 +1,30 @@
-2026-11-03 04:49:07,627Z INFO ora Logging started; trace_marshalling=False
-2026-11-03 04:49:07,631Z INFO ora PEER_START name=ora id=811 address=127.0.0.1:15472
-2026-11-03 04:49:07,631Z INFO ora JOIN via=127.0.0.1:15464 successor=alpha path=alpha
-2026-11-03 04:49:07,631Z INFO ora SEND to=alpha type=notify id=8c111a43f7b94c50a372b8588dfadc6e body={'peer': {'id': 811, 'name': 'ora', 'host': '127.0.0.1', 'port': 15472}}
+2026-11-13 01:56:39,004Z INFO ora Logging started; trace_marshalling=false
+2026-11-13 01:56:39,018Z INFO ora PEER_START name=ora id=811 address=127.0.0.1:38702
+2026-11-13 01:56:39,018Z INFO ora JOIN via=127.0.0.1:38691 successor=alpha path=alpha
+2026-11-13 01:56:39,018Z INFO ora SEND to=alpha type=notify id=4b63f0ce50ef49339bc6ea6fb38d65b9 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":38702}}
 Commands: status | lookup NAME | host MEETING | leave | crash
-2026-11-03 04:49:08,171Z INFO ora SUCCESSOR_CHANGED alpha -> xray
-2026-11-03 04:49:08,679Z INFO ora SUCCESSOR_CHANGED xray -> sierra
-2026-11-03 04:49:08,874Z INFO ora PREDECESSOR_CHANGED None -> alpha
-2026-11-03 04:49:09,090Z INFO ora RECV from=alpha type=find_owner id=2abcee4871f44ff5ad49596b67b84836 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,090Z INFO ora FORWARD key=23745 next=sierra final=False path=alpha>ora
-2026-11-03 04:49:09,091Z INFO ora SEND to=sierra type=find_owner id=53364bb125a24de8b9efb949725f8626 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
-2026-11-03 04:49:09,244Z INFO ora RECV from=alpha type=find_owner id=376c0fcf2286401c891bc78fa1355861 body={'key': 27791, 'path': ['alpha'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,244Z INFO ora FORWARD key=27791 next=sierra final=False path=alpha>ora
-2026-11-03 04:49:09,259Z INFO ora SEND to=sierra type=find_owner id=72387a72917748949dfe259f65715067 body={'key': 27791, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
-2026-11-03 04:49:09,660Z INFO ora RECV from=alpha type=find_owner id=252152e4fff74261af3bc5636948aad8 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,660Z INFO ora FORWARD key=23745 next=sierra final=False path=alpha>ora
-2026-11-03 04:49:09,673Z INFO ora SEND to=sierra type=find_owner id=6c52937346a64f48ac79bdb00aa45ad6 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
-2026-11-03 04:49:09,733Z INFO ora RECV from=alpha type=find_owner id=966bd5384759434f8779090f8139b017 body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,733Z INFO ora FORWARD key=23745 next=sierra final=False path=alpha>ora
-2026-11-03 04:49:09,748Z INFO ora SEND to=sierra type=find_owner id=d1b9eb815d12499d947cf1579c69af6b body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
-2026-11-03 04:49:09,823Z INFO ora RECV from=client type=lookup id=c13a89d1c6fe4c68a2d5c0c7d2eeda9f body={'name': 'demo-room'}
-2026-11-03 04:49:09,823Z INFO ora FORWARD key=23745 next=sierra final=False path=ora
-2026-11-03 04:49:09,824Z INFO ora SEND to=sierra type=find_owner id=4f50ca989408462085898dc49981ccb8 body={'key': 23745, 'path': ['ora'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,854Z INFO ora SEND to=echo type=get id=5e2f848570b749818d7fd7c674dd7259 body={'name': 'demo-room'}
-2026-11-03 04:49:09,855Z INFO ora LOOKUP name=demo-room key=23745 owner=echo hops=2 path=ora>sierra>echo found=True
-2026-11-03 04:49:09,960Z INFO ora RECV from=alpha type=find_owner id=a0e254654c094112852da60f477211ee body={'key': 23745, 'path': ['alpha'], 'ttl': 31, 'final': False}
-2026-11-03 04:49:09,960Z INFO ora FORWARD key=23745 next=sierra final=False path=alpha>ora
-2026-11-03 04:49:09,961Z INFO ora SEND to=sierra type=find_owner id=ee8c321b4255452197260dae34a8d6e5 body={'key': 23745, 'path': ['alpha', 'ora'], 'ttl': 30, 'final': False}
-2026-11-03 04:49:13,365Z WARNING ora SUCCESSOR_FAILED peer=sierra error=timed out
-2026-11-03 04:49:13,365Z INFO ora SUCCESSOR_CHANGED sierra -> alpha
-2026-11-03 04:49:21,528Z WARNING ora RPC_FAILED remote=('127.0.0.1', 15896) error=[WinError 10054] An existing connection was forcibly closed by the remote host
+2026-11-13 01:56:39,530Z INFO ora SUCCESSOR_CHANGED alpha -> xray
+2026-11-13 01:56:40,032Z INFO ora SUCCESSOR_CHANGED xray -> sierra
+2026-11-13 01:56:40,320Z INFO ora PREDECESSOR_CHANGED null -> alpha
+2026-11-13 01:56:40,358Z INFO ora RECV from=alpha type=find_owner id=3c9e89223bf544fdbb058e5a7a81e0e5 body={"key":23745,"path":["alpha"],"ttl":31,"final":false}
+2026-11-13 01:56:40,358Z INFO ora FORWARD key=23745 next=sierra final=false path=alpha>ora
+2026-11-13 01:56:40,359Z INFO ora SEND to=sierra type=find_owner id=8f890d65ccc34fecb90bce312284aca7 body={"key":23745,"path":["alpha","ora"],"ttl":30,"final":false}
+2026-11-13 01:56:40,454Z INFO ora RECV from=alpha type=find_owner id=65c024b982324e3fab82676dc10b716a body={"key":27791,"path":["alpha"],"ttl":31,"final":false}
+2026-11-13 01:56:40,454Z INFO ora FORWARD key=27791 next=sierra final=false path=alpha>ora
+2026-11-13 01:56:40,454Z INFO ora SEND to=sierra type=find_owner id=ee021060fdb14c239ef75acd9a8f7760 body={"key":27791,"path":["alpha","ora"],"ttl":30,"final":false}
+2026-11-13 01:56:41,027Z INFO ora RECV from=alpha type=find_owner id=1a64c8a3a8124bd0bf31c3e8aa42a6fb body={"key":23745,"path":["alpha"],"ttl":31,"final":false}
+2026-11-13 01:56:41,027Z INFO ora FORWARD key=23745 next=sierra final=false path=alpha>ora
+2026-11-13 01:56:41,028Z INFO ora SEND to=sierra type=find_owner id=dc46f79339a442c8a449ac6e2233cf04 body={"key":23745,"path":["alpha","ora"],"ttl":30,"final":false}
+2026-11-13 01:56:41,033Z INFO ora RECV from=alpha type=find_owner id=7a92b81afe48478dba66b48a25e02d7d body={"key":23745,"path":["alpha"],"ttl":31,"final":false}
+2026-11-13 01:56:41,033Z INFO ora FORWARD key=23745 next=sierra final=false path=alpha>ora
+2026-11-13 01:56:41,033Z INFO ora SEND to=sierra type=find_owner id=06d0806b48844ef4878321ec4379e1b3 body={"key":23745,"path":["alpha","ora"],"ttl":30,"final":false}
+2026-11-13 01:56:41,038Z INFO ora RECV from=client type=lookup id=f5d917a72e014d2386a9f4a886ab26cf body={"name":"demo-room"}
+2026-11-13 01:56:41,038Z INFO ora FORWARD key=23745 next=sierra final=false path=ora
+2026-11-13 01:56:41,038Z INFO ora SEND to=sierra type=find_owner id=d92363abd425430696f64cdf077ade5c body={"key":23745,"path":["ora"],"ttl":31,"final":false}
+2026-11-13 01:56:41,040Z INFO ora SEND to=echo type=get id=81646a0107d3407088129635852d7a37 body={"name":"demo-room"}
+2026-11-13 01:56:41,041Z INFO ora LOOKUP name=demo-room key=23745 owner=echo hops=2 path=ora>sierra>echo found=true
+2026-11-13 01:56:41,057Z INFO ora RECV from=alpha type=find_owner id=bd23c6be111d4455b555bc9bfaca1870 body={"key":23745,"path":["alpha"],"ttl":31,"final":false}
+2026-11-13 01:56:41,057Z INFO ora FORWARD key=23745 next=sierra final=false path=alpha>ora
+2026-11-13 01:56:41,057Z INFO ora SEND to=sierra type=find_owner id=0b0ee14ad2844bbab2d150db9af40c0a body={"key":23745,"path":["alpha","ora"],"ttl":30,"final":false}
+2026-11-13 01:56:42,565Z WARNING ora SUCCESSOR_FAILED peer=sierra error=connect ECONNREFUSED 127.0.0.1:38695
+2026-11-13 01:56:42,565Z INFO ora SUCCESSOR_CHANGED sierra -> alpha
