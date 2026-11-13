@@ -8,9 +8,9 @@ The prototype coordinates meetings and messages. It does not transmit microphone
 
 | Assignment requirement | Where it is implemented |
 | --- | --- |
-| Peer node | `peer.py`, class `Peer`: one OS process per peer |
+| Peer node | `peer.ts`, class `Peer`: one OS process per peer |
 | Join and leave | `Peer.start`, `Peer.leave` (key handoff and neighbor relinking) |
-| Lookup mechanism | `Peer.lookup`, `on_find_owner`: request forwarded hop by hop around the ring |
+| Lookup mechanism | `Peer.lookup`, `onFindOwner`: request forwarded hop by hop around the ring |
 | Overlay structure | Chord-style ring with SHA-1 IDs and a successor list of 3 |
 | Data or service discovery | Meeting name maps to the coordinator's `host:port`, held by the peer that owns the key |
 | Failure handling | Failed hops are routed around, stabilization repairs the ring, records are soft state |
@@ -32,14 +32,14 @@ Arrows run clockwise: every peer knows its next 3 successors and its predecessor
 
 ## Required software
 
-- Python 3.9 or newer. Standard library only.
+- Node.js 24.16 or newer. Node runs the `.ts` files directly, with no build step.
 - TCP networking on localhost. Separate computers also work (see below).
 
-Check Python with `python --version` (`python3 --version` on some systems).
+Check Node with `node --version`.
 
 ## Install dependencies
 
-There are none to install. Clone the repository and switch to the `milestone-3` branch:
+Running the services, the demos and the tests needs nothing beyond Node. Clone the repository and switch to the `milestone-3` branch:
 
 ```sh
 git clone https://github.com/Utkarsh-EL/ZoomClone.git
@@ -47,10 +47,12 @@ cd ZoomClone
 git switch milestone-3
 ```
 
+`npm install` fetches the TypeScript compiler and the Node type definitions, which only `npm run typecheck` uses.
+
 ## Run the demo (one command)
 
 ```sh
-python p2p_demo.py
+node p2p_demo.ts
 ```
 
 It takes about 15 seconds and prints `RESULT: PASS` at the end, exiting with code 0. The demo starts every peer as a separate OS process and checks each step:
@@ -79,10 +81,10 @@ A run committed to the repository is already there for reference. Running the de
 Open one terminal per peer in the project directory. Peers read commands from the terminal while logging to it.
 
 ```sh
-python peer.py --name alpha  --port 7001
-python peer.py --name sierra --port 7002 --bootstrap 127.0.0.1:7001
-python peer.py --name ora    --port 7003 --bootstrap 127.0.0.1:7001
-python peer.py --name xray   --port 7004 --bootstrap 127.0.0.1:7001
+node peer.ts --name alpha  --port 7001
+node peer.ts --name sierra --port 7002 --bootstrap 127.0.0.1:7001
+node peer.ts --name ora    --port 7003 --bootstrap 127.0.0.1:7001
+node peer.ts --name xray   --port 7004 --bootstrap 127.0.0.1:7001
 ```
 
 The first peer has no `--bootstrap`, so it creates the ring. Any running peer works as a bootstrap. Add `--verbose` to also log periodic maintenance traffic, which is hidden by default so that lookups and membership changes stay readable.
@@ -103,12 +105,12 @@ Try this order:
 
 1. At `sierra`, type `host demo-room`.
 2. At `alpha`, type `lookup demo-room`. The path is `alpha>ora>sierra>xray`.
-3. In a new terminal, start a fifth peer: `python peer.py --name echo --port 7005 --bootstrap 127.0.0.1:7001`. Its log shows `JOIN`, and the `xray` log shows `KEYS_TRANSFER`.
+3. In a new terminal, start a fifth peer: `node peer.ts --name echo --port 7005 --bootstrap 127.0.0.1:7001`. Its log shows `JOIN`, and the `xray` log shows `KEYS_TRANSFER`.
 4. Join the meeting through any peer, in one new terminal per participant:
 
    ```sh
-   python client.py --name alice --meeting demo-room --via 127.0.0.1:7003
-   python client.py --name bob   --meeting demo-room --via 127.0.0.1:7001
+   node client.ts --name alice --meeting demo-room --via 127.0.0.1:7003
+   node client.ts --name bob   --meeting demo-room --via 127.0.0.1:7001
    ```
 
    Then use the client commands `members`, `say Hello`, `quit`.
@@ -120,8 +122,8 @@ Try this order:
 Bind each peer to its LAN address, which is also the address it advertises to other peers:
 
 ```sh
-python peer.py --name alpha  --host 192.168.1.10 --port 7001
-python peer.py --name sierra --host 192.168.1.11 --port 7001 --bootstrap 192.168.1.10:7001
+node peer.ts --name alpha  --host 192.168.1.10 --port 7001
+node peer.ts --name sierra --host 192.168.1.11 --port 7001 --bootstrap 192.168.1.10:7001
 ```
 
 Allow the peer port and the coordinator's ephemeral ports through the firewall. Do not expose this prototype to the public Internet: it has no encryption or authentication, and any host that can reach a peer can tell it to leave.
@@ -129,31 +131,31 @@ Allow the peer port and the coordinator's ephemeral ports through the firewall. 
 ## Reproduce the test cases
 
 ```sh
-python -m unittest discover -s tests -v
+npm test
 ```
 
-All tests are local and use the standard library. `tests/test_p2p.py` runs the overlay in-process with a short stabilization interval.
+All tests are local and use Node's built-in test runner, so `npm install` is not needed first. `tests/p2p.test.ts` runs the overlay in-process with a short stabilization interval.
 
-| Scenario | Test in `tests/test_p2p.py` | Expected result |
+| Scenario | Test in `tests/p2p.test.ts` | Expected result |
 | --- | --- | --- |
-| Ring interval math, including wraparound | `RingMathTests` | Correct membership on both sides of ID 0 |
-| At least four peers form a ring | `test_four_peers_form_one_ordered_ring` | Peers ordered by ID with correct successor lists |
-| Lookup routed through the overlay | `test_lookup_is_routed_hop_by_hop_to_the_owner` | Path visits each peer in ring order and ends at the owner |
-| Resource discovered through peers | `test_every_peer_resolves_a_meeting_and_clients_can_use_it` | Every peer resolves the address; 4 clients join and exchange a message |
-| Peer joining | `test_joining_peer_receives_the_keys_it_now_owns` | New owner receives the key and the old owner drops it |
-| Peer leaving | `test_graceful_leave_hands_off_keys_and_relinks_neighbors` | Successor holds the key at once; neighbors are linked to each other |
-| Owner fails | `test_crashed_owner_is_routed_around_and_provider_reregisters` | Ring repairs; the host's refresh moves the record to the new owner |
-| Two consecutive peers fail | `test_ring_survives_two_consecutive_crashes` | Survivors link past both failed peers |
-| Dead or hung next hop | `test_lookup_routes_around_a_dead_successor_before_repair`, `test_lookup_routes_around_a_frozen_successor` | Lookup still reaches the right owner |
-| Host fails | `test_crashed_provider_record_expires` | Lookup returns not found once the TTL passes |
-| Restart on the same address | `test_crashed_peer_can_rejoin_on_its_old_address` | Ring returns to its original order |
-| Invalid input | `ValidationTests` | Error replies, refused duplicate IDs, and the peer keeps serving |
+| Ring interval math, including wraparound | `ring math` | Correct membership on both sides of ID 0 |
+| At least four peers form a ring | `four peers form one ordered ring` | Peers ordered by ID with correct successor lists |
+| Lookup routed through the overlay | `lookup is routed hop by hop to the owner` | Path visits each peer in ring order and ends at the owner |
+| Resource discovered through peers | `every peer resolves a meeting and clients can use it` | Every peer resolves the address; 4 clients join and exchange a message |
+| Peer joining | `joining peer receives the keys it now owns` | New owner receives the key and the old owner drops it |
+| Peer leaving | `graceful leave hands off keys and relinks neighbors` | Successor holds the key at once; neighbors are linked to each other |
+| Owner fails | `crashed owner is routed around and provider reregisters` | Ring repairs; the host's refresh moves the record to the new owner |
+| Two consecutive peers fail | `ring survives two consecutive crashes` | Survivors link past both failed peers |
+| Dead or hung next hop | `lookup routes around a dead successor before repair`, `lookup routes around a frozen successor` | Lookup still reaches the right owner |
+| Host fails | `crashed provider record expires` | Lookup returns not found once the TTL passes |
+| Restart on the same address | `crashed peer can rejoin on its old address` | Ring returns to its original order |
+| Invalid input | `validation` | Error replies, refused duplicate IDs, and the peer keeps serving |
 
-The Milestone 2 suites (`tests/test_protocol.py`, `tests/test_integration.py`) still run in the same command.
+The Milestone 2 suites (`tests/protocol.test.ts`, `tests/integration.test.ts`) run in the same command. `npm run typecheck` runs the TypeScript compiler over every source and test file without emitting anything.
 
 ## Peer protocol
 
-Peers use the Milestone 2 wire format from `protocol.py`: one UTF-8 JSON object per line, at most 65,536 bytes, with a `type`, `id`, `timestamp` and `body`. Each request uses one short-lived TCP connection and gets one `reply` or `error` carrying a matching `request_id`.
+Peers use the Milestone 2 wire format from `protocol.ts`: one UTF-8 JSON object per line, at most 65,536 bytes, with a `type`, `id`, `timestamp` and `body`. Each request uses one short-lived TCP connection and gets one `reply` or `error` carrying a matching `request_id`.
 
 ```json
 {"type":"find_owner","id":"49fe9d0e...","timestamp":"2026-11-03T04:40:00.736+00:00","sender":"sierra","quiet":false,"body":{"key":23745,"path":["alpha","ora","sierra"],"ttl":29,"final":true}}
@@ -174,24 +176,25 @@ Log lines worth watching: `JOIN`, `FORWARD`, `LOOKUP`, `KEYS_TRANSFER`, `STORE`,
 The meeting coordinator and clients still work without the overlay:
 
 ```sh
-python demo.py
-python server.py --host 127.0.0.1 --port 5000 --trace-marshalling
-python client.py --name alice --meeting demo-room --port 5000 --trace-marshalling
+node demo.ts
+node server.ts --host 127.0.0.1 --port 5000 --trace-marshalling
+node client.ts --name alice --meeting demo-room --port 5000 --trace-marshalling
 ```
 
-Client commands are `members`, `info`, `subscribe TOPIC`, `publish TOPIC TEXT`, `say TEXT` and `quit`. `python demo.py` writes its evidence to `evidence/demo_run/`.
+Client commands are `members`, `info`, `subscribe TOPIC`, `publish TOPIC TEXT`, `say TEXT` and `quit`. `node demo.ts` writes its evidence to `evidence/demo_run/`.
 
 ## Source files
 
 | File | Responsibility |
 | --- | --- |
-| `peer.py` | Peer node: ring membership, stabilization, routing, records, meeting hosting, command line |
-| `p2p_demo.py` | Multi-process overlay scenario with checks; saves evidence |
-| `protocol.py` | Packet creation, JSON encoding and decoding, framing, UTC logging |
-| `server.py` | Meeting coordinator: membership, subscriptions, request routing, publish and group fan-out |
-| `client.py` | Participant API and command line; `--via` finds the meeting through a peer |
-| `demo.py`, `demo_node.py` | Milestone 2 multi-process scenario |
+| `peer.ts` | Peer node: ring membership, stabilization, routing, records, meeting hosting, command line |
+| `p2p_demo.ts` | Multi-process overlay scenario with checks; saves evidence |
+| `protocol.ts` | Packet creation, JSON encoding and decoding, framing, UTC logging |
+| `server.ts` | Meeting coordinator: membership, subscriptions, request routing, publish and group fan-out |
+| `client.ts` | Participant API and command line; `--via` finds the meeting through a peer |
+| `demo.ts`, `demo_node.ts` | Milestone 2 multi-process scenario |
 | `tests/` | Protocol, socket integration and overlay tests |
+| `package.json`, `tsconfig.json` | Test and type-check scripts; compiler settings limited to syntax Node can strip |
 
 ## Known limitations
 
