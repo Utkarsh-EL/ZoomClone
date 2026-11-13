@@ -5,7 +5,8 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { createConnection, createServer, type AddressInfo } from "node:net";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { parseArgs } from "node:util";
+
+import { parseCli } from "./protocol.ts";
 
 export const ROOT = import.meta.dirname;
 
@@ -103,7 +104,7 @@ const TRANSCRIPT_MARKERS = [
 ];
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: { "output-dir": { type: "string", default: join(ROOT, "evidence", "demo_run") } },
   });
   const target = prepareOutput(values["output-dir"], (file) =>

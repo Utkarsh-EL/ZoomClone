@@ -1,15 +1,14 @@
 /** Automated node scenario; each invocation runs in an independent OS process. */
 
 import { writeFileSync } from "node:fs";
-import { parseArgs } from "node:util";
 
 import { Participant } from "./client.ts";
-import { configureLogging, intOption, usageError } from "./protocol.ts";
+import { configureLogging, intOption, parseCli, usageError } from "./protocol.ts";
 
 const TOPIC = "meeting.announcements";
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: {
       name: { type: "string" },
       role: { type: "string" },

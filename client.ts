@@ -2,11 +2,10 @@
 
 import { createConnection, type Socket } from "node:net";
 import { createInterface } from "node:readline";
-import { parseArgs } from "node:util";
 
 import { discover, parseAddress } from "./peer.ts";
 import {
-  configureLogging, FrameReader, intOption, message, NetworkError, receive, send, usageError,
+  configureLogging, FrameReader, intOption, parseCli, message, NetworkError, receive, send, usageError,
   type Body, type Logger, type Packet,
 } from "./protocol.ts";
 
@@ -174,7 +173,7 @@ export class Participant {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: {
       name: { type: "string" },
       meeting: { type: "string", default: "demo-room" },

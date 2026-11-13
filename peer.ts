@@ -4,10 +4,9 @@ import { createHash } from "node:crypto";
 import { createConnection, createServer, type AddressInfo, type Server, type Socket } from "node:net";
 import { createInterface } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
-import { parseArgs } from "node:util";
 
 import {
-  configureLogging, FrameReader, intOption, message, NetworkError, quietLogger, receive, send, usageError,
+  configureLogging, FrameReader, intOption, parseCli, message, NetworkError, quietLogger, receive, send, usageError,
   type Body, type Logger, type Packet,
 } from "./protocol.ts";
 import { IDENTIFIER_RE, MeetingServer } from "./server.ts";
@@ -816,7 +815,7 @@ async function readCommands(peer: Peer): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: {
       name: { type: "string" },  // Ring position comes from a hash of this name.
       host: { type: "string", default: "127.0.0.1" },  // IP to bind and advertise to other peers.

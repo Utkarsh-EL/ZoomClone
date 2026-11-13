@@ -1,10 +1,9 @@
 /** TCP meeting coordinator, pub-sub broker, and group message distributor. */
 
 import { createServer, type AddressInfo, type Server, type Socket } from "node:net";
-import { parseArgs } from "node:util";
 
 import {
-  configureLogging, FrameReader, intOption, message, NetworkError, receive, send,
+  configureLogging, FrameReader, intOption, message, NetworkError, parseCli, receive, send,
   type Body, type Logger, type Packet,
 } from "./protocol.ts";
 
@@ -295,7 +294,7 @@ export class Session {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: {
       host: { type: "string", default: "127.0.0.1" },  // Bind IP; use 0.0.0.0 for LAN access.
       port: { type: "string", default: "5000" },

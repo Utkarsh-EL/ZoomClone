@@ -4,12 +4,11 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, openSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { parseArgs } from "node:util";
 
 import { Participant } from "./client.ts";
 import { exited, freeLocalPort, prepareOutput, ROOT, waitForBroker, waitForExit } from "./demo.ts";
 import { MAX_HOPS, RemoteError, RPC_TIMEOUT, discover, rpc, type Address } from "./peer.ts";
-import { configureLogging, NetworkError, quietLogger, type Body, type Logger } from "./protocol.ts";
+import { configureLogging, NetworkError, parseCli, quietLogger, type Body, type Logger } from "./protocol.ts";
 
 const MEETING = "demo-room";
 const FIRST_PEERS = ["alpha", "sierra", "ora", "xray"];
@@ -239,7 +238,7 @@ function writeTranscript(target: string): string {
 }
 
 async function main(): Promise<void> {
-  const { values } = parseArgs({
+  const values = parseCli({
     options: { "output-dir": { type: "string", default: join(ROOT, "evidence", "p2p_run") } },
   });
   const target = prepareOutput(values["output-dir"], (file) =>

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, openSync, writeSync } from "node:fs";
 import type { Socket } from "node:net";
 import { join } from "node:path";
+import { parseArgs, type ParseArgsConfig } from "node:util";
 
 export const MAX_MESSAGE_BYTES = 65536;
 const NEWLINE = 0x0a;
@@ -190,6 +191,15 @@ function logTime(): string {
 export function usageError(text: string): never {
   console.error(`error: ${text}`);
   process.exit(2);
+}
+
+/** Parse command-line flags, turning an unknown or malformed flag into a usage error. */
+export function parseCli<T extends ParseArgsConfig>(config: T): ReturnType<typeof parseArgs<T>>["values"] {
+  try {
+    return parseArgs(config).values;
+  } catch (error) {
+    usageError((error as Error).message);
+  }
 }
 
 /** Read an integer command-line value, exiting when it is missing or malformed. */
