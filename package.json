@@ -1,0 +1,17 @@
+{
+  "name": "zoomclone",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.16"
+  },
+  "scripts": {
+    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts",
+    "typecheck": "tsc",
+    "demo": "node p2p_demo.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}
