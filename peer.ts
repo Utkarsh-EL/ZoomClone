@@ -1046,6 +1046,24 @@ export class Peer {
     }
   }
 
+  /**
+   * Withdraw a request that has not been granted, or release the lock if it has. A grant that arrives later finds no
+   * request, is refused, and the leader moves on to the next one.
+   */
+  async cancel(resource = MINUTES): Promise<void> {
+    const claim = this.claims.get(resource);
+    if (claim?.state === "held") {
+      await this.release(resource);
+      return;
+    }
+    if (claim?.state !== "waiting") {
+      return;
+    }
+    this.claims.delete(resource);
+    this.event("LOCK_CANCEL", `leader=${this.leader?.name ?? null} resource=${resource}`);
+    claim.granted?.reject(new Error(`The request for the ${resource} lock was withdrawn`));
+  }
+
   /** Resend waiting requests; as leader, take locks back from holders that died or whose release was lost. */
   private async checkLock(): Promise<void> {
     for (const claim of [...this.claims.values()]) {

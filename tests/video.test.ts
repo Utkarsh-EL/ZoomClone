@@ -195,6 +195,23 @@ describe("presenter slot", () => {
     assert.ok(gap < 1000, `video never stalled for a second (longest gap ${gap.toFixed(0)} ms)`);
   });
 
+  test("a peer that leaves the queue gives up its place to the next one", async () => {
+    await room.open();
+    const presenting = room.video("sierra").share("pattern", { frames: 15 });
+    await waitFor(() => room.video("sierra").state === "presenting", "sierra to present");
+    const leaving = room.video("ora").share("pattern", { frames: 5 });
+    await waitFor(() => room.get("alpha").onStatus().lock.grants.presenter?.queue.length === 1, "ora to queue");
+    const next = room.video("xray").share("pattern", { frames: 5 });
+    await waitFor(() => room.get("alpha").onStatus().lock.grants.presenter?.queue.length === 2, "xray to queue");
+    assert.equal((await room.video("ora").stop()).state, "off", "ora left the queue at once");
+    assert.equal(await leaving, 0);
+    await Promise.all([presenting, next]);
+    assert.equal(await room.video("ora").share("pattern", { frames: 5 }), 5, "ora can ask again");
+    await waitFor(() => room.video("alpha").received.length === 25, "25 frames at alpha");
+    assert.deepEqual(frameRuns(room.video("alpha").received).map((run) => `${run.presenter} ${run.first}-${run.last}`),
+                     ["sierra 1-15", "xray 1-5", "ora 1-5"]);
+  });
+
   test("the meeting page serves, refuses stray frames, and shares the test pattern", async () => {
     await room.open();
     const server = await startWebUi(room.video("sierra"), 0);

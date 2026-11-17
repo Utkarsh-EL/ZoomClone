@@ -197,6 +197,7 @@ The log lines to watch are `ELECTION_START`, `ELECTION_RESULT`, `LEADER_ELECTED`
 | Video needs the lock | `without the presenter lock, two streams interleave at a viewer` | Streams mixed |
 | Presenter slot | `with the presenter lock, presenters take turns and viewers see whole streams` | 2 whole runs at each viewer |
 | Video through failover | `a presentation keeps going through a leader crash, and the next presenter keeps its place` | `sierra 1-30, xray 1-10`; no pause of a second |
+| Leaving the queue | `a peer that leaves the queue gives up its place to the next one` | The next peer presents; the one that left can ask again |
 | Meeting page | `the meeting page serves, refuses stray frames, and shares the test pattern` | Page served; stray frame refused; slot given back on stop |
 
 ## Coordination protocol
@@ -223,6 +224,7 @@ These requests use the same JSON-lines wire format as the overlay (see [Peer pro
 - **The minutes file must be reachable by every peer.** The demo runs on one machine. On separate computers, the file would have to be on a shared drive.
 - **Video goes through one coordinator.** The meeting's host relays every frame, so its upload grows with the number of viewers, and the meeting ends if the host fails. Frames are images, not a compressed video stream, so they use more bandwidth than a real codec.
 - **Camera and screen capture need a secure page.** Browsers allow them on `http://127.0.0.1` and `http://localhost`, not on plain `http://` to a LAN address. The pages bind only to `127.0.0.1`.
+- **The page has no access control.** Binding to `127.0.0.1` keeps other machines out, but any website open in the same browser can still send the page requests, such as starting a test-pattern share. Run it only for demos.
 - **No audio.**
 - **No security.** Any host that can reach a peer can claim to be the leader or send a grant.
 

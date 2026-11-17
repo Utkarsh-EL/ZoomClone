@@ -172,7 +172,16 @@ export class VideoSession {
     this.finished = Promise.withResolvers<void>();
     this.emitState();
     if (locked) {
-      await this.peer.acquire(PRESENTER);
+      try {
+        await this.peer.acquire(PRESENTER);
+      } catch (error) {
+        const withdrawn = this.stopRequested;
+        await this.finish();
+        if (withdrawn) {
+          return 0;  // Left the queue.
+        }
+        throw error;
+      }
     }
     if (this.stopRequested) {  // Stopped while waiting: give the slot straight back.
       await this.finish();
@@ -202,7 +211,9 @@ export class VideoSession {
     }
     this.stopRequested = true;
     if (this.state === "waiting") {
-      return this.status();  // share() gives the slot back as soon as it is granted.
+      await this.peer.cancel(PRESENTER);  // Leaves the queue, or gives back a slot granted a moment ago.
+      await this.finished?.promise;
+      return this.status();
     }
     if (this.source === "browser") {
       await this.finish();
