@@ -22,6 +22,7 @@ export interface Packet {
   sender?: string;
   meeting?: string;
   quiet?: boolean;
+  lamport?: number;  // Sender's logical clock at the send event.
   body?: any;
   [field: string]: unknown;
 }
@@ -38,6 +39,29 @@ export interface Logger {
 }
 
 export const quietLogger: Logger = { info() {}, warning() {}, error() {} };
+
+/**
+ * Lamport logical clock. Every local event and every send ticks it by one; a receive jumps it past the
+ * sender's timestamp, so an event that causes another always carries the smaller time.
+ */
+export class LamportClock {
+  time = 0;
+
+  /** Count a local event or a send and return its timestamp. */
+  tick(): number {
+    this.time += 1;
+    return this.time;
+  }
+
+  /** Count a receive: take the larger of both clocks, then tick. A message without a timestamp counts as 0. */
+  receive(remote: unknown): number {
+    if (remote !== undefined && !(Number.isSafeInteger(remote) && (remote as number) >= 0)) {
+      throw new Error("Invalid Lamport timestamp");
+    }
+    this.time = Math.max(this.time, (remote as number | undefined) ?? 0) + 1;
+    return this.time;
+  }
+}
 
 /** Return a UTC timestamp as an ISO 8601 string with an explicit offset. */
 export function timestamp(): string {
