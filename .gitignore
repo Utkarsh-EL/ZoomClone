@@ -14,4 +14,4 @@ services/signaling/public/dev/*.js
 __pycache__/
 *.pyc
 logs/
-Milestone*_Report.pdf
+Milestone*_Report.*

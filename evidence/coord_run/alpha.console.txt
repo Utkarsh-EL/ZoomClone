@@ -1,0 +1,205 @@
+2026-11-17 18:54:15,752Z INFO alpha Logging started; trace_marshalling=false
+2026-11-17 18:54:15,768Z INFO alpha PEER_START name=alpha id=52303 address=127.0.0.1:18046
+2026-11-17 18:54:15,768Z INFO alpha JOIN via=127.0.0.1:13990 successor=ora path=ora
+2026-11-17 18:54:15,768Z INFO alpha SEND to=ora type=notify id=221e51d5643c469b8d3a155698d42de7 lamport=1 body={"peer":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046}}
+Commands: status | lookup NAME | host MEETING | elect | append COUNT [unsafe] | leave | crash
+2026-11-17 18:54:15,916Z INFO alpha PREDECESSOR_CHANGED null -> ora
+2026-11-17 18:54:16,040Z INFO alpha PREDECESSOR_CHANGED ora -> sierra
+2026-11-17 18:54:16,041Z INFO alpha RECV from=sierra type=election id=c3104a75756b480e8e70f3a47a2d1677 lamport=66 body={"initiator":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"candidates":[{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}],"term":0}
+2026-11-17 18:54:16,041Z INFO alpha SEND to=ora type=election id=0a94ff2341c14839b0e44b6235c1245a lamport=67 body={"initiator":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"candidates":[{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046}],"term":0}
+2026-11-17 18:54:16,042Z INFO alpha RECV from=ora type=election id=57bf043e2afb45c2b5725cebd0c6ec7c lamport=72 body={"initiator":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"candidates":[{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},{"id":811,"name":"ora","host":"127.0.0.1","port":13990}],"term":1}
+2026-11-17 18:54:16,042Z INFO alpha ELECTION_DROPPED lamport=73 initiator=sierra
+2026-11-17 18:54:16,147Z INFO alpha PREDECESSOR_CHANGED sierra -> xray
+2026-11-17 18:54:16,149Z INFO alpha RECV from=xray type=election id=99e2d5d35e5e4208b649f7dc72dbb122 lamport=91 body={"initiator":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"candidates":[{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}],"term":0}
+2026-11-17 18:54:16,149Z INFO alpha SEND to=ora type=election id=13bc1c3bc6794a7c98f81fa5d15fbe0c lamport=92 body={"initiator":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"candidates":[{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046}],"term":0}
+2026-11-17 18:54:16,150Z INFO alpha RECV from=ora type=election id=4f45fe76c0b34366b532960bd91cb09a lamport=97 body={"initiator":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"candidates":[{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},{"id":811,"name":"ora","host":"127.0.0.1","port":13990}],"term":1}
+2026-11-17 18:54:16,150Z INFO alpha ELECTION_DROPPED lamport=98 initiator=xray
+2026-11-17 18:54:16,286Z INFO alpha LEADER_LEARNED lamport=110 leader=ora term=1
+2026-11-17 18:54:17,099Z INFO alpha RECV from=xray type=election id=ad062271e8b24aebb8420b4e1d875b67 lamport=225 body={"initiator":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"candidates":[{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}],"term":1}
+2026-11-17 18:54:17,099Z INFO alpha SEND to=ora type=election id=fe1737219fac43d898f6e1423cab41d2 lamport=226 body={"initiator":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"candidates":[{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046}],"term":1}
+2026-11-17 18:54:17,101Z INFO alpha RECV from=sierra type=elected id=3f5a198cf7254025ac9ff55820a5da17 lamport=233 body={"term":1,"members":["sierra","xray","alpha","ora"]}
+2026-11-17 18:54:17,101Z INFO alpha LEADER_ELECTED lamport=234 leader=alpha term=2 members=sierra,xray,alpha,ora
+2026-11-17 18:54:17,101Z INFO alpha SEND to=ora type=coordinator id=3b88bce7875b419b9f760269540e4cf4 lamport=235 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2,"visited":["alpha"],"waiting":[],"holders":[]}
+2026-11-17 18:54:17,103Z INFO alpha RECV from=xray type=coordinator id=a23373d8195041f798ab08b0b43b4118 lamport=246 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2,"visited":["alpha","ora","sierra","xray"],"waiting":[],"holders":[]}
+2026-11-17 18:54:17,104Z INFO alpha LOCK_STATE_RECOVERED lamport=247 term=2 members=alpha,ora,sierra,xray holder=null queue=[]
+2026-11-17 18:54:17,161Z INFO alpha RECV from=client type=append id=4a77cc2c63504dc98cce9ffbecc11d4b lamport=261 body={"count":5,"locked":false}
+2026-11-17 18:54:17,161Z INFO alpha CS_ENTER lamport=262 locked=false
+2026-11-17 18:54:17,220Z INFO alpha CS_EXIT lamport=265 entry=1
+2026-11-17 18:54:17,220Z INFO alpha CS_ENTER lamport=266 locked=false
+2026-11-17 18:54:17,282Z INFO alpha CS_EXIT lamport=267 entry=5
+2026-11-17 18:54:17,282Z INFO alpha CS_ENTER lamport=268 locked=false
+2026-11-17 18:54:17,342Z INFO alpha CS_EXIT lamport=281 entry=9
+2026-11-17 18:54:17,343Z INFO alpha CS_ENTER lamport=282 locked=false
+2026-11-17 18:54:17,404Z INFO alpha CS_EXIT lamport=283 entry=13
+2026-11-17 18:54:17,404Z INFO alpha CS_ENTER lamport=284 locked=false
+2026-11-17 18:54:17,465Z INFO alpha CS_EXIT lamport=299 entry=17
+2026-11-17 18:54:17,467Z INFO alpha RECV from=client type=append id=04c8ca91db474f9789e0c879bdf0a6d2 lamport=301 body={"count":5,"locked":true}
+2026-11-17 18:54:17,467Z INFO alpha LOCK_REQUEST lamport=302 leader=alpha
+2026-11-17 18:54:17,467Z INFO alpha LOCK_QUEUED lamport=303 peer=alpha requested_at=302 queue=[alpha@302]
+2026-11-17 18:54:17,467Z INFO alpha LOCK_GRANT lamport=304 to=alpha requested_at=302 queue=[]
+2026-11-17 18:54:17,467Z INFO alpha LOCK_ACQUIRED lamport=305 from=alpha requested_at=302
+2026-11-17 18:54:17,467Z INFO alpha CS_ENTER lamport=306 locked=true
+2026-11-17 18:54:17,467Z INFO alpha RECV from=ora type=lock_request id=99b756e293ac49f8ae7a800f0535950d lamport=307 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":303}
+2026-11-17 18:54:17,467Z INFO alpha LOCK_QUEUED lamport=308 peer=ora requested_at=303 queue=[ora@303]
+2026-11-17 18:54:17,467Z INFO alpha RECV from=sierra type=lock_request id=7c6a7e0c1b69440f801e40dbec4a5c73 lamport=310 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":298}
+2026-11-17 18:54:17,467Z INFO alpha LOCK_QUEUED lamport=311 peer=sierra requested_at=298 queue=[sierra@298,ora@303]
+2026-11-17 18:54:17,468Z INFO alpha RECV from=xray type=lock_request id=d34e030d02d34763ab8514143972ad22 lamport=313 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":279}
+2026-11-17 18:54:17,468Z INFO alpha LOCK_QUEUED lamport=314 peer=xray requested_at=279 queue=[xray@279,sierra@298,ora@303]
+2026-11-17 18:54:17,525Z INFO alpha CS_EXIT lamport=316 entry=1
+2026-11-17 18:54:17,525Z INFO alpha LOCK_RELEASE lamport=317 leader=alpha
+2026-11-17 18:54:17,525Z INFO alpha LOCK_RELEASED lamport=318 peer=alpha queue=[xray@279,sierra@298,ora@303]
+2026-11-17 18:54:17,525Z INFO alpha LOCK_GRANT lamport=319 to=xray requested_at=279 queue=[sierra@298,ora@303]
+2026-11-17 18:54:17,525Z INFO alpha SEND to=xray type=lock_grant id=c6620be0e7a042998120fcbd8aa17daf lamport=320 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,526Z INFO alpha LOCK_REQUEST lamport=321 leader=alpha
+2026-11-17 18:54:17,526Z INFO alpha LOCK_QUEUED lamport=322 peer=alpha requested_at=321 queue=[sierra@298,ora@303,alpha@321]
+2026-11-17 18:54:17,587Z INFO alpha RECV from=xray type=lock_release id=4326e38f118e4c018c16979cb15fde44 lamport=335 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:17,587Z INFO alpha LOCK_RELEASED lamport=336 peer=xray queue=[sierra@298,ora@303,alpha@321]
+2026-11-17 18:54:17,587Z INFO alpha LOCK_GRANT lamport=337 to=sierra requested_at=298 queue=[ora@303,alpha@321]
+2026-11-17 18:54:17,587Z INFO alpha SEND to=sierra type=lock_grant id=e803199fc9b743708fb9c92b076d629c lamport=338 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,588Z INFO alpha RECV from=xray type=lock_request id=3c505da8807b433e892fed0fda49af47 lamport=343 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":341}
+2026-11-17 18:54:17,588Z INFO alpha LOCK_QUEUED lamport=344 peer=xray requested_at=341 queue=[ora@303,alpha@321,xray@341]
+2026-11-17 18:54:17,649Z INFO alpha RECV from=sierra type=lock_release id=2c195c12a2da4069bd459217378c3388 lamport=347 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:17,649Z INFO alpha LOCK_RELEASED lamport=348 peer=sierra queue=[ora@303,alpha@321,xray@341]
+2026-11-17 18:54:17,649Z INFO alpha LOCK_GRANT lamport=349 to=ora requested_at=303 queue=[alpha@321,xray@341]
+2026-11-17 18:54:17,649Z INFO alpha SEND to=ora type=lock_grant id=09fa980ab9014446a11c8ccd40b3c0ce lamport=350 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,650Z INFO alpha RECV from=sierra type=lock_request id=ab60af57ac8940d1924fccb4b34f0c5f lamport=355 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":353}
+2026-11-17 18:54:17,650Z INFO alpha LOCK_QUEUED lamport=356 peer=sierra requested_at=353 queue=[alpha@321,xray@341,sierra@353]
+2026-11-17 18:54:17,712Z INFO alpha RECV from=ora type=lock_release id=b79ac30800154581af4d20c5fe0dd2ff lamport=373 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:17,712Z INFO alpha LOCK_RELEASED lamport=374 peer=ora queue=[alpha@321,xray@341,sierra@353]
+2026-11-17 18:54:17,712Z INFO alpha LOCK_GRANT lamport=375 to=alpha requested_at=321 queue=[xray@341,sierra@353]
+2026-11-17 18:54:17,712Z INFO alpha LOCK_ACQUIRED lamport=376 from=alpha requested_at=321
+2026-11-17 18:54:17,712Z INFO alpha CS_ENTER lamport=378 locked=true
+2026-11-17 18:54:17,712Z INFO alpha RECV from=ora type=lock_request id=73521bace8974b61a914c39b9e5737e7 lamport=381 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":379}
+2026-11-17 18:54:17,713Z INFO alpha LOCK_QUEUED lamport=382 peer=ora requested_at=379 queue=[xray@341,sierra@353,ora@379]
+2026-11-17 18:54:17,772Z INFO alpha CS_EXIT lamport=384 entry=5
+2026-11-17 18:54:17,772Z INFO alpha LOCK_RELEASE lamport=385 leader=alpha
+2026-11-17 18:54:17,772Z INFO alpha LOCK_RELEASED lamport=386 peer=alpha queue=[xray@341,sierra@353,ora@379]
+2026-11-17 18:54:17,772Z INFO alpha LOCK_GRANT lamport=387 to=xray requested_at=341 queue=[sierra@353,ora@379]
+2026-11-17 18:54:17,772Z INFO alpha SEND to=xray type=lock_grant id=91764aa420c841f893be4310bc3690d6 lamport=388 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,772Z INFO alpha LOCK_REQUEST lamport=389 leader=alpha
+2026-11-17 18:54:17,772Z INFO alpha LOCK_QUEUED lamport=390 peer=alpha requested_at=389 queue=[sierra@353,ora@379,alpha@389]
+2026-11-17 18:54:17,833Z INFO alpha RECV from=xray type=lock_release id=9dd148242d9a4ebfa299863f9b2ae21f lamport=411 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:17,833Z INFO alpha LOCK_RELEASED lamport=412 peer=xray queue=[sierra@353,ora@379,alpha@389]
+2026-11-17 18:54:17,833Z INFO alpha LOCK_GRANT lamport=413 to=sierra requested_at=353 queue=[ora@379,alpha@389]
+2026-11-17 18:54:17,833Z INFO alpha SEND to=sierra type=lock_grant id=6f0ac2a3245b4dd1bbc062548fc850f1 lamport=414 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,833Z INFO alpha RECV from=xray type=lock_request id=8677fa7a917d4cf7820957cb1cbcc8c3 lamport=419 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":417}
+2026-11-17 18:54:17,833Z INFO alpha LOCK_QUEUED lamport=420 peer=xray requested_at=417 queue=[ora@379,alpha@389,xray@417]
+2026-11-17 18:54:17,894Z INFO alpha RECV from=sierra type=lock_release id=92a28a200f22499ca1ceb24daf20df06 lamport=423 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:17,894Z INFO alpha LOCK_RELEASED lamport=424 peer=sierra queue=[ora@379,alpha@389,xray@417]
+2026-11-17 18:54:17,894Z INFO alpha LOCK_GRANT lamport=425 to=ora requested_at=379 queue=[alpha@389,xray@417]
+2026-11-17 18:54:17,894Z INFO alpha SEND to=ora type=lock_grant id=2e5e11befa21476a9d76c22c48172a4a lamport=426 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:17,895Z INFO alpha RECV from=sierra type=lock_request id=2494def231544a769153afc126529a93 lamport=431 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":429}
+2026-11-17 18:54:17,895Z INFO alpha LOCK_QUEUED lamport=432 peer=sierra requested_at=429 queue=[alpha@389,xray@417,sierra@429]
+2026-11-17 18:54:17,954Z INFO alpha RECV from=ora type=lock_release id=53fd496f17014025a99e4b5c467d65f7 lamport=453 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:17,954Z INFO alpha LOCK_RELEASED lamport=454 peer=ora queue=[alpha@389,xray@417,sierra@429]
+2026-11-17 18:54:17,954Z INFO alpha LOCK_GRANT lamport=455 to=alpha requested_at=389 queue=[xray@417,sierra@429]
+2026-11-17 18:54:17,954Z INFO alpha LOCK_ACQUIRED lamport=456 from=alpha requested_at=389
+2026-11-17 18:54:17,954Z INFO alpha CS_ENTER lamport=458 locked=true
+2026-11-17 18:54:17,955Z INFO alpha RECV from=ora type=lock_request id=3ec02d696e6548b284696e6f7a1a3552 lamport=461 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":459}
+2026-11-17 18:54:17,955Z INFO alpha LOCK_QUEUED lamport=462 peer=ora requested_at=459 queue=[xray@417,sierra@429,ora@459]
+2026-11-17 18:54:18,015Z INFO alpha CS_EXIT lamport=464 entry=9
+2026-11-17 18:54:18,015Z INFO alpha LOCK_RELEASE lamport=465 leader=alpha
+2026-11-17 18:54:18,015Z INFO alpha LOCK_RELEASED lamport=466 peer=alpha queue=[xray@417,sierra@429,ora@459]
+2026-11-17 18:54:18,015Z INFO alpha LOCK_GRANT lamport=467 to=xray requested_at=417 queue=[sierra@429,ora@459]
+2026-11-17 18:54:18,015Z INFO alpha SEND to=xray type=lock_grant id=80705fd6691446d49314500b18fe2a8e lamport=468 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,015Z INFO alpha LOCK_REQUEST lamport=469 leader=alpha
+2026-11-17 18:54:18,015Z INFO alpha LOCK_QUEUED lamport=470 peer=alpha requested_at=469 queue=[sierra@429,ora@459,alpha@469]
+2026-11-17 18:54:18,077Z INFO alpha RECV from=xray type=lock_release id=8c8dec8db37f4d559de15e53fc0868e7 lamport=483 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:18,077Z INFO alpha LOCK_RELEASED lamport=484 peer=xray queue=[sierra@429,ora@459,alpha@469]
+2026-11-17 18:54:18,077Z INFO alpha LOCK_GRANT lamport=485 to=sierra requested_at=429 queue=[ora@459,alpha@469]
+2026-11-17 18:54:18,077Z INFO alpha SEND to=sierra type=lock_grant id=4610baab17ef45efbce9cc6b9eae9b03 lamport=486 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,078Z INFO alpha RECV from=xray type=lock_request id=29424268d859473ebb68ddb9c8e6ae57 lamport=491 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":489}
+2026-11-17 18:54:18,078Z INFO alpha LOCK_QUEUED lamport=492 peer=xray requested_at=489 queue=[ora@459,alpha@469,xray@489]
+2026-11-17 18:54:18,138Z INFO alpha RECV from=sierra type=lock_release id=4521d5c12cd047a7b876a2390207e29e lamport=495 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:18,138Z INFO alpha LOCK_RELEASED lamport=496 peer=sierra queue=[ora@459,alpha@469,xray@489]
+2026-11-17 18:54:18,138Z INFO alpha LOCK_GRANT lamport=497 to=ora requested_at=459 queue=[alpha@469,xray@489]
+2026-11-17 18:54:18,138Z INFO alpha SEND to=ora type=lock_grant id=bc25ce61bf534c4cae205ac53e05fdbe lamport=498 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,139Z INFO alpha RECV from=sierra type=lock_request id=b03b0698a7f247d7bcc44955b35cc15c lamport=503 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":501}
+2026-11-17 18:54:18,139Z INFO alpha LOCK_QUEUED lamport=504 peer=sierra requested_at=501 queue=[alpha@469,xray@489,sierra@501]
+2026-11-17 18:54:18,200Z INFO alpha RECV from=ora type=lock_release id=78c96ade26494f67bb327a7cde0f180a lamport=521 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:18,200Z INFO alpha LOCK_RELEASED lamport=522 peer=ora queue=[alpha@469,xray@489,sierra@501]
+2026-11-17 18:54:18,200Z INFO alpha LOCK_GRANT lamport=523 to=alpha requested_at=469 queue=[xray@489,sierra@501]
+2026-11-17 18:54:18,200Z INFO alpha LOCK_ACQUIRED lamport=524 from=alpha requested_at=469
+2026-11-17 18:54:18,200Z INFO alpha CS_ENTER lamport=526 locked=true
+2026-11-17 18:54:18,201Z INFO alpha RECV from=ora type=lock_request id=f9f2908681f74437902925ebc6dd96b4 lamport=529 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":527}
+2026-11-17 18:54:18,201Z INFO alpha LOCK_QUEUED lamport=530 peer=ora requested_at=527 queue=[xray@489,sierra@501,ora@527]
+2026-11-17 18:54:18,262Z INFO alpha CS_EXIT lamport=532 entry=13
+2026-11-17 18:54:18,262Z INFO alpha LOCK_RELEASE lamport=533 leader=alpha
+2026-11-17 18:54:18,262Z INFO alpha LOCK_RELEASED lamport=534 peer=alpha queue=[xray@489,sierra@501,ora@527]
+2026-11-17 18:54:18,262Z INFO alpha LOCK_GRANT lamport=535 to=xray requested_at=489 queue=[sierra@501,ora@527]
+2026-11-17 18:54:18,262Z INFO alpha SEND to=xray type=lock_grant id=4af94aea9fe547b3847c4387245c99a1 lamport=536 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,262Z INFO alpha LOCK_REQUEST lamport=537 leader=alpha
+2026-11-17 18:54:18,262Z INFO alpha LOCK_QUEUED lamport=538 peer=alpha requested_at=537 queue=[sierra@501,ora@527,alpha@537]
+2026-11-17 18:54:18,323Z INFO alpha RECV from=xray type=lock_release id=9df7d309c57b4b359981c0dbe94e7630 lamport=559 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:18,323Z INFO alpha LOCK_RELEASED lamport=560 peer=xray queue=[sierra@501,ora@527,alpha@537]
+2026-11-17 18:54:18,323Z INFO alpha LOCK_GRANT lamport=561 to=sierra requested_at=501 queue=[ora@527,alpha@537]
+2026-11-17 18:54:18,323Z INFO alpha SEND to=sierra type=lock_grant id=caf06d323bbb4d0ebea79b85f495bd31 lamport=562 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,324Z INFO alpha RECV from=xray type=lock_request id=aa51e095cf4a4260ae36882ad2ceacab lamport=567 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":565}
+2026-11-17 18:54:18,324Z INFO alpha LOCK_QUEUED lamport=568 peer=xray requested_at=565 queue=[ora@527,alpha@537,xray@565]
+2026-11-17 18:54:18,386Z INFO alpha RECV from=sierra type=lock_release id=7330fdea6bce40258db52943aba6213b lamport=571 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:18,386Z INFO alpha LOCK_RELEASED lamport=572 peer=sierra queue=[ora@527,alpha@537,xray@565]
+2026-11-17 18:54:18,386Z INFO alpha LOCK_GRANT lamport=573 to=ora requested_at=527 queue=[alpha@537,xray@565]
+2026-11-17 18:54:18,386Z INFO alpha SEND to=ora type=lock_grant id=d514b970d49641c18cb5e3e2cf4f2633 lamport=574 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,386Z INFO alpha RECV from=sierra type=lock_request id=5d262258695c4c99bf6bef7de56386fb lamport=579 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":577}
+2026-11-17 18:54:18,386Z INFO alpha LOCK_QUEUED lamport=580 peer=sierra requested_at=577 queue=[alpha@537,xray@565,sierra@577]
+2026-11-17 18:54:18,447Z INFO alpha RECV from=ora type=lock_release id=8dcebdd2e0dc400b9591cb2bee4e22b7 lamport=585 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:18,448Z INFO alpha LOCK_RELEASED lamport=586 peer=ora queue=[alpha@537,xray@565,sierra@577]
+2026-11-17 18:54:18,448Z INFO alpha LOCK_GRANT lamport=587 to=alpha requested_at=537 queue=[xray@565,sierra@577]
+2026-11-17 18:54:18,448Z INFO alpha LOCK_ACQUIRED lamport=588 from=alpha requested_at=537
+2026-11-17 18:54:18,448Z INFO alpha CS_ENTER lamport=590 locked=true
+2026-11-17 18:54:18,449Z INFO alpha RECV from=ora type=lock_request id=7e02fa0b075644d690144f7cfe1aac28 lamport=593 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":591}
+2026-11-17 18:54:18,449Z INFO alpha LOCK_QUEUED lamport=594 peer=ora requested_at=591 queue=[xray@565,sierra@577,ora@591]
+2026-11-17 18:54:18,507Z INFO alpha CS_EXIT lamport=601 entry=17
+2026-11-17 18:54:18,507Z INFO alpha LOCK_RELEASE lamport=602 leader=alpha
+2026-11-17 18:54:18,507Z INFO alpha LOCK_RELEASED lamport=603 peer=alpha queue=[xray@565,sierra@577,ora@591]
+2026-11-17 18:54:18,507Z INFO alpha LOCK_GRANT lamport=604 to=xray requested_at=565 queue=[sierra@577,ora@591]
+2026-11-17 18:54:18,507Z INFO alpha SEND to=xray type=lock_grant id=5bfdf22470d4469d8975fa9864e7e571 lamport=605 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,569Z INFO alpha RECV from=xray type=lock_release id=44d646173e864130bc1c641d528dc30a lamport=613 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:18,569Z INFO alpha LOCK_RELEASED lamport=614 peer=xray queue=[sierra@577,ora@591]
+2026-11-17 18:54:18,569Z INFO alpha LOCK_GRANT lamport=615 to=sierra requested_at=577 queue=[ora@591]
+2026-11-17 18:54:18,569Z INFO alpha SEND to=sierra type=lock_grant id=6449476acb40460a9a4916cb277f6f1c lamport=616 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,629Z INFO alpha RECV from=sierra type=lock_release id=dc439a5d42c942dcbeb794d1f13e8c65 lamport=634 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:18,629Z INFO alpha LOCK_RELEASED lamport=635 peer=sierra queue=[ora@591]
+2026-11-17 18:54:18,629Z INFO alpha LOCK_GRANT lamport=636 to=ora requested_at=591 queue=[]
+2026-11-17 18:54:18,629Z INFO alpha SEND to=ora type=lock_grant id=5b3b20ee2dba4f5aa7a84dc3dd89b2ba lamport=637 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,690Z INFO alpha RECV from=ora type=lock_release id=6769db720c0e4b42b14eccc2130b8b97 lamport=655 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:18,690Z INFO alpha LOCK_RELEASED lamport=656 peer=ora queue=[]
+2026-11-17 18:54:18,694Z INFO alpha RECV from=ora type=lock_request id=6a87373b71d346c9846c2b2c3807e2ec lamport=663 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":661}
+2026-11-17 18:54:18,694Z INFO alpha LOCK_QUEUED lamport=664 peer=ora requested_at=661 queue=[ora@661]
+2026-11-17 18:54:18,694Z INFO alpha LOCK_GRANT lamport=665 to=ora requested_at=661 queue=[]
+2026-11-17 18:54:18,694Z INFO alpha SEND to=ora type=lock_grant id=6051299f644546a3ba347ee775b9cc4b lamport=666 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,694Z INFO alpha RECV from=sierra type=lock_request id=4e54656a1c634f9b8065ad1337155307 lamport=668 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":644}
+2026-11-17 18:54:18,694Z INFO alpha LOCK_QUEUED lamport=669 peer=sierra requested_at=644 queue=[sierra@644]
+2026-11-17 18:54:18,694Z INFO alpha RECV from=xray type=lock_request id=0406530e1acf4335baf900531f8567b7 lamport=671 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":657}
+2026-11-17 18:54:18,694Z INFO alpha LOCK_QUEUED lamport=672 peer=xray requested_at=657 queue=[sierra@644,xray@657]
+2026-11-17 18:54:18,751Z INFO alpha RECV from=ora type=lock_release id=f7fec6537d6842819bd5a83079eb284f lamport=676 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:18,751Z INFO alpha LOCK_RELEASED lamport=677 peer=ora queue=[sierra@644,xray@657]
+2026-11-17 18:54:18,751Z INFO alpha LOCK_GRANT lamport=678 to=sierra requested_at=644 queue=[xray@657]
+2026-11-17 18:54:18,751Z INFO alpha SEND to=sierra type=lock_grant id=69cab9d6dabc44179302658dc0509b68 lamport=679 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,752Z INFO alpha RECV from=ora type=lock_request id=efee4273c2224e09a6d0ee8c18af83af lamport=684 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":682}
+2026-11-17 18:54:18,752Z INFO alpha LOCK_QUEUED lamport=685 peer=ora requested_at=682 queue=[xray@657,ora@682]
+2026-11-17 18:54:18,811Z INFO alpha RECV from=sierra type=lock_release id=1a848e7d915d4e328829028d20b348c3 lamport=689 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033}}
+2026-11-17 18:54:18,811Z INFO alpha LOCK_RELEASED lamport=690 peer=sierra queue=[xray@657,ora@682]
+2026-11-17 18:54:18,811Z INFO alpha LOCK_GRANT lamport=691 to=xray requested_at=657 queue=[ora@682]
+2026-11-17 18:54:18,811Z INFO alpha SEND to=xray type=lock_grant id=03bb1d345db141c0b5a12e0524802b30 lamport=692 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,812Z INFO alpha RECV from=sierra type=lock_request id=648b637b1b6f4ba9b44824e186ca67eb lamport=697 body={"peer":{"id":13800,"name":"sierra","host":"127.0.0.1","port":18033},"requested_at":695}
+2026-11-17 18:54:18,812Z INFO alpha LOCK_QUEUED lamport=698 peer=sierra requested_at=695 queue=[ora@682,sierra@695]
+2026-11-17 18:54:18,873Z INFO alpha RECV from=xray type=lock_release id=c69a8036e3a64871820c64a09c35c6c2 lamport=711 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039}}
+2026-11-17 18:54:18,873Z INFO alpha LOCK_RELEASED lamport=712 peer=xray queue=[ora@682,sierra@695]
+2026-11-17 18:54:18,873Z INFO alpha LOCK_GRANT lamport=713 to=ora requested_at=682 queue=[sierra@695]
+2026-11-17 18:54:18,873Z INFO alpha SEND to=ora type=lock_grant id=63caa42f495e4cf2a73be5e97e5a5cf5 lamport=714 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,874Z INFO alpha RECV from=xray type=lock_request id=3b0293d258f5420f9337c2de6420608c lamport=719 body={"peer":{"id":40128,"name":"xray","host":"127.0.0.1","port":18039},"requested_at":717}
+2026-11-17 18:54:18,874Z INFO alpha LOCK_QUEUED lamport=720 peer=xray requested_at=717 queue=[sierra@695,xray@717]
+2026-11-17 18:54:18,934Z INFO alpha RECV from=ora type=lock_release id=d9b9baf0c49a4ac8809a35326cf01472 lamport=723 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990}}
+2026-11-17 18:54:18,934Z INFO alpha LOCK_RELEASED lamport=724 peer=ora queue=[sierra@695,xray@717]
+2026-11-17 18:54:18,934Z INFO alpha LOCK_GRANT lamport=725 to=sierra requested_at=695 queue=[xray@717]
+2026-11-17 18:54:18,934Z INFO alpha SEND to=sierra type=lock_grant id=76f11b6452044ea997b0e1246cf7b6f9 lamport=726 body={"leader":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18046},"term":2}
+2026-11-17 18:54:18,935Z INFO alpha RECV from=ora type=lock_request id=3626f9d975044ebb96fa332ffa18b032 lamport=731 body={"peer":{"id":811,"name":"ora","host":"127.0.0.1","port":13990},"requested_at":729}
+2026-11-17 18:54:18,935Z INFO alpha LOCK_QUEUED lamport=732 peer=ora requested_at=729 queue=[xray@717,ora@729]
+2026-11-17 18:54:20,330Z INFO alpha Logging started; trace_marshalling=false
+2026-11-17 18:54:20,346Z INFO alpha PEER_START name=alpha id=52303 address=127.0.0.1:18390
+2026-11-17 18:54:20,346Z INFO alpha JOIN via=127.0.0.1:13990 successor=ora path=ora
+2026-11-17 18:54:20,346Z INFO alpha SEND to=ora type=notify id=ce0b3a2118cb4fb8ae186e273e5961a8 lamport=1 body={"peer":{"id":52303,"name":"alpha","host":"127.0.0.1","port":18390}}
+Commands: status | lookup NAME | host MEETING | elect | append COUNT [unsafe] | leave | crash
+2026-11-17 18:54:20,693Z INFO alpha PREDECESSOR_CHANGED null -> xray
+2026-11-17 18:54:20,856Z INFO alpha LEADER_LEARNED lamport=1169 leader=xray term=3
