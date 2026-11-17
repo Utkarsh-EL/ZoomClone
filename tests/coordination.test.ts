@@ -134,7 +134,8 @@ describe("coordination", () => {
 
   test("requests are ordered by Lamport time, then ring id", () => {
     const requests: LockRequest[] = [
-      { peer: ref(5, "e"), requested_at: 7 }, { peer: ref(9, "i"), requested_at: 3 }, { peer: ref(2, "b"), requested_at: 7 },
+      { peer: ref(5, "e"), requested_at: 7, resource: "minutes" }, { peer: ref(9, "i"), requested_at: 3, resource: "minutes" },
+      { peer: ref(2, "b"), requested_at: 7, resource: "minutes" },
     ];
     assert.deepEqual(requests.sort(requestOrder).map((item) => item.peer.name), ["i", "b", "e"]);
   });
@@ -181,13 +182,47 @@ describe("coordination", () => {
     let oraHolds = false;
     const waiting = ora.acquire().then(() => { oraHolds = true; });
     await group.waitForLeader("xray");
-    assert.equal(group.get("xray").onStatus().lock.holder, "sierra", "recovery found the holder");
+    assert.equal(group.get("xray").onStatus().lock.grants.minutes.holder, "sierra", "recovery found the holder");
     await sleep(300);
     assert.equal(oraHolds, false, "the lock was not given out a second time");
     await sierra.release();
     await waiting;
-    assert.equal(ora.lockState, "held");
+    assert.equal(ora.lockState(), "held");
     await ora.release();
+  });
+
+  test("named locks are independent: holding presenter does not block minutes", async () => {
+    await group.ring();
+    await group.electAlpha();
+    await group.get("sierra").acquire("presenter");
+    const written = await group.get("ora").appendMinutes(2);
+    assert.deepEqual(written, [1, 2]);
+    assert.equal(group.get("sierra").lockState("presenter"), "held");
+    let xrayPresents = false;
+    const waiting = group.get("xray").acquire("presenter").then(() => { xrayPresents = true; });
+    await sleep(300);
+    assert.equal(xrayPresents, false, "presenter has one holder at a time");
+    await group.get("sierra").release("presenter");
+    await waiting;
+    assert.equal(group.get("xray").lockState("presenter"), "held");
+  });
+
+  test("the presenter keeps the slot across a leader crash, and a waiter keeps its place", async () => {
+    await group.ring();
+    await group.electAlpha();
+    await group.get("sierra").acquire("presenter");
+    let oraPresents = false;
+    const waiting = group.get("ora").acquire("presenter").then(() => { oraPresents = true; });
+    await waitFor(() => group.get("alpha").onStatus().lock.grants.presenter?.queue.length === 1, "ora to queue");
+    group.crash("alpha");
+    await group.waitForLeader("xray");
+    const grants = group.get("xray").onStatus().lock.grants;
+    assert.equal(grants.presenter.holder, "sierra");
+    assert.deepEqual(grants.presenter.queue, ["ora"]);
+    await sleep(300);
+    assert.equal(oraPresents, false);
+    await group.get("sierra").release("presenter");
+    await waiting;
   });
 
   test("a crashed lock holder does not block the others", async () => {
@@ -197,7 +232,7 @@ describe("coordination", () => {
     group.crash("sierra");
     const started = performance.now();
     await group.get("ora").acquire();
-    assert.equal(group.get("ora").lockState, "held");
+    assert.equal(group.get("ora").lockState(), "held");
     assert.ok(performance.now() - started < 10000);
     await group.get("ora").release();
   });
@@ -206,10 +241,10 @@ describe("coordination", () => {
     await group.ring();
     await group.electAlpha();
     const ora = group.get("ora");
-    const fake = { leader: group.get("xray").me, term: ora.term };
+    const fake = { leader: group.get("xray").me, term: ora.term, resource: "minutes" };
     await assert.rejects(rpc(ora.address, "lock_grant", fake), RemoteError);
-    await assert.rejects(rpc(ora.address, "lock_grant", { leader: group.get("alpha").me, term: ora.term }),
+    await assert.rejects(rpc(ora.address, "lock_grant", { leader: group.get("alpha").me, term: ora.term, resource: "minutes" }),
                          /Not waiting/);
-    assert.equal(ora.lockState, "idle");
+    assert.equal(ora.lockState(), "idle");
   });
 });

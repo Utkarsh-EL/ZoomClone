@@ -62,12 +62,36 @@ interface Published {
   owner: string | null;
 }
 
+export const MINUTES = "minutes";  // The lock that protects the shared minutes; other resources have their own locks.
+
 export interface LockRequest {
   peer: PeerRef;
   requested_at: number;  // Lamport time of the request event.
+  resource: string;
 }
 
 export type LockState = "idle" | "waiting" | "held";
+
+interface Holder {
+  peer: PeerRef;
+  resource: string;
+}
+
+/** The leader's view of one named lock. */
+interface Grant {
+  holder: PeerRef | null;
+  queue: LockRequest[];
+  seq: number;             // Counts grants, so a stale holder check cannot free a newer grant.
+  pending: number | null;  // Ring ID of the peer whose grant is in flight.
+}
+
+/** This peer's own use of one named lock. */
+interface Claim {
+  state: LockState;
+  request: LockRequest | null;
+  granted: PromiseWithResolvers<void> | null;
+  sent: number;            // Monotonic seconds when the request was last sent.
+}
 
 /** A live peer answered a request with an error. */
 export class RemoteError extends Error {
@@ -139,7 +163,15 @@ function checkRequest(value: unknown): LockRequest {
       || candidate.requested_at! < 0) {
     throw new Error("Invalid lock request");
   }
-  return { peer: checkRef(candidate.peer), requested_at: candidate.requested_at! };
+  return { peer: checkRef(candidate.peer), requested_at: candidate.requested_at!, resource: checkName(candidate.resource) };
+}
+
+function checkHolder(value: unknown): Holder {
+  const candidate = value as Partial<Holder> | null;
+  if (typeof candidate !== "object" || candidate === null) {
+    throw new Error("Invalid lock holder");
+  }
+  return { peer: checkRef(candidate.peer), resource: checkName(candidate.resource) };
 }
 
 /** Order lock requests by Lamport time, then ring ID, so every peer agrees on one total order. */
@@ -250,20 +282,14 @@ export class Peer {
   minutes: string;
   leader: PeerRef | null = null;
   term = 0;                                      // Election round that chose the leader; a higher term wins.
-  lockState: LockState = "idle";
   private electionStarted = 0;                   // Monotonic seconds; 0 while no election is pending here.
-  // Lock coordinator state, used while this peer is the leader.
+  // Lock coordinator state, used while this peer is the leader. One recovery covers every resource.
   private lockReady = false;                     // False until the coordinator message has gone around the ring.
   private recoveryStarted = 0;
-  private lockHolder: PeerRef | null = null;
-  private lockQueue: LockRequest[] = [];
-  private earlyReleases = new Set<number>();     // Releases that arrived before the recovery finished.
-  private grantSeq = 0;
-  private grantPending: number | null = null;    // Ring ID of the peer whose grant is in flight.
-  // Lock requester state.
-  private lockRequest: LockRequest | null = null;
-  private lockGranted: PromiseWithResolvers<void> | null = null;
-  private lockRequestSent = 0;
+  private grants = new Map<string, Grant>();
+  private earlyReleases = new Set<string>();     // "resource id" of releases that arrived before recovery finished.
+  // This peer's own lock use, per resource.
+  private claims = new Map<string, Claim>();
   readonly stopping = new AbortController();
   stopped = false;
   private stoppedSignal = Promise.withResolvers<void>();
@@ -303,7 +329,7 @@ export class Peer {
       ["lock_request", (body) => this.onLockRequest(body)],
       ["lock_grant", (body) => this.onLockGrant(body)],
       ["lock_release", (body) => this.onLockRelease(body)],
-      ["lock_held", () => ({ held: this.lockState === "held" })],
+      ["lock_held", (body) => ({ held: this.lockState(checkName(body.resource)) === "held" })],
       ["append", (body) => this.onAppend(body)],
     ]);
   }
@@ -400,7 +426,9 @@ export class Peer {
     this.stopping.abort();
     this.stopMeetings();
     this.server.close();
-    this.lockGranted?.reject(new Error("Peer stopped"));
+    for (const claim of this.claims.values()) {
+      claim.granted?.reject(new Error("Peer stopped"));
+    }
     this.stopped = true;
     this.stoppedSignal.resolve();
   }
@@ -794,8 +822,7 @@ export class Peer {
     if (this.leader?.id === this.me.id && leader.id !== this.me.id) {
       this.event("LEADER_STEPPED_DOWN", `term=${this.term} new_leader=${leader.name}`);
       this.lockReady = false;
-      this.lockHolder = null;
-      this.lockQueue = [];
+      this.grants.clear();
       this.earlyReleases.clear();
     }
     this.leader = leader;
@@ -852,13 +879,13 @@ export class Peer {
   }
 
   /**
+  /**
    * Send the coordinator message around the ring. It announces this leader and term, and collects every peer's
    * lock state; no grant goes out until it returns, so a lock held under the old leader is never given twice.
    */
   private async startRecovery(): Promise<void> {
     this.lockReady = false;
-    this.lockHolder = null;
-    this.lockQueue = [];
+    this.grants.clear();
     this.earlyReleases.clear();
     this.recoveryStarted = monotonic();
     await this.forwardRing("coordinator", this.reportLock({
@@ -866,12 +893,14 @@ export class Peer {
     }));
   }
 
-  /** Add this peer's own lock state to a coordinator message. */
+  /** Add this peer's own lock state, for every resource, to a coordinator message. */
   private reportLock(body: Body): Body {
-    if (this.lockState === "held") {
-      body.holders = [...body.holders, this.me];
-    } else if (this.lockState === "waiting" && this.lockRequest) {
-      body.waiting = [...body.waiting, this.lockRequest];
+    for (const [resource, claim] of this.claims) {
+      if (claim.state === "held") {
+        body.holders = [...body.holders, { peer: this.me, resource }];
+      } else if (claim.state === "waiting" && claim.request) {
+        body.waiting = [...body.waiting, claim.request];
+      }
     }
     return body;
   }
@@ -885,7 +914,7 @@ export class Peer {
     }
     const visited: string[] = body.visited.map(checkName);
     const waiting = body.waiting.map(checkRequest);
-    const holders = body.holders.map(checkRef);
+    const holders = body.holders.map(checkHolder);
     if (leader.id === this.me.id) {
       if (term === this.term && this.leader?.id === this.me.id && !this.lockReady) {
         this.finishRecovery(holders, waiting, visited);
@@ -905,49 +934,82 @@ export class Peer {
     return { status: "ok" };
   }
 
-  private finishRecovery(holders: PeerRef[], waiting: LockRequest[], visited: string[]): void {
-    const live = holders.filter((peer) => !this.earlyReleases.has(peer.id));
-    if (live.length > 1) {
-      this.log.error(`MUTEX_VIOLATION holders=${live.map((peer) => peer.name).join(",")}`);
-    }
-    this.lockHolder = live[0] ?? null;
-    const queue = new Map<number, LockRequest>();
-    for (const request of [...waiting, ...this.lockQueue]) {
-      if (request.peer.id !== this.lockHolder?.id && !queue.has(request.peer.id)) {
-        queue.set(request.peer.id, request);
+  private finishRecovery(holders: Holder[], waiting: LockRequest[], visited: string[]): void {
+    // Requests that reached this leader while the message was going around join the collected ones.
+    const arrived = [...this.grants.values()].flatMap((grant) => grant.queue);
+    this.grants.clear();
+    for (const { peer, resource } of holders) {
+      if (this.earlyReleases.has(`${resource} ${peer.id}`)) {
+        continue;
+      }
+      const grant = this.grantFor(resource);
+      if (grant.holder) {
+        this.log.error(`MUTEX_VIOLATION resource=${resource} holders=${grant.holder.name},${peer.name}`);
+      } else {
+        grant.holder = peer;
       }
     }
-    this.lockQueue = [...queue.values()].sort(requestOrder);
+    for (const request of [...waiting, ...arrived]) {
+      const grant = this.grantFor(request.resource);
+      if (request.peer.id !== grant.holder?.id && !grant.queue.some((queued) => queued.peer.id === request.peer.id)) {
+        grant.queue.push(request);
+      }
+    }
     this.lockReady = true;
     this.earlyReleases.clear();
-    this.event("LOCK_STATE_RECOVERED", `term=${this.term} members=${visited.join(",")} `
-                                       + `holder=${this.lockHolder?.name ?? null} queue=${describeQueue(this.lockQueue)}`);
-    this.background(this.grantNext(), "LOCK_GRANT");
+    const prefix = `term=${this.term} members=${visited.join(",")}`;
+    if (!this.grants.size) {
+      this.event("LOCK_STATE_RECOVERED", `${prefix} holder=null queue=[]`);
+    }
+    for (const [resource, grant] of this.grants) {
+      grant.queue.sort(requestOrder);
+      this.event("LOCK_STATE_RECOVERED", `${prefix} holder=${grant.holder?.name ?? null} `
+                                         + `queue=${describeQueue(grant.queue)} resource=${resource}`);
+      this.background(this.grantNext(resource), "LOCK_GRANT");
+    }
   }
 
-  // ---- mutual exclusion (centralized lock run by the leader) ----
+  // ---- mutual exclusion (centralized locks run by the leader, one per named resource) ----
 
-  /** Ask the leader for the lock and wait for its grant. */
-  async acquire(): Promise<void> {
-    if (this.lockState !== "idle") {
-      throw new Error("This peer already wants the lock");
+  private grantFor(resource: string): Grant {
+    let grant = this.grants.get(resource);
+    if (grant === undefined) {
+      grant = { holder: null, queue: [], seq: 0, pending: null };
+      this.grants.set(resource, grant);
+    }
+    return grant;
+  }
+
+  /** This peer's state for one lock. */
+  lockState(resource = MINUTES): LockState {
+    return this.claims.get(resource)?.state ?? "idle";
+  }
+
+  /** Ask the leader for a lock and wait for its grant. */
+  async acquire(resource = MINUTES): Promise<void> {
+    checkName(resource);
+    if (this.lockState(resource) !== "idle") {
+      throw new Error(`This peer already wants the ${resource} lock`);
     }
     if (this.stopping.signal.aborted) {
       throw new Error("Peer stopped");
     }
-    this.lockRequest = { peer: this.me, requested_at: this.clock.tick() };
-    this.lockState = "waiting";
-    this.lockGranted = Promise.withResolvers<void>();
-    this.lockGranted.promise.catch(() => {});  // halt() may reject it before the await below is reached.
-    this.log.info(`LOCK_REQUEST lamport=${this.lockRequest.requested_at} leader=${this.leader?.name ?? null}`);
-    await this.sendLockRequest();
-    await this.lockGranted.promise;
+    const granted = Promise.withResolvers<void>();
+    granted.promise.catch(() => {});  // halt() may reject it before the await below is reached.
+    const claim: Claim = {
+      state: "waiting", request: { peer: this.me, requested_at: this.clock.tick(), resource }, granted, sent: 0,
+    };
+    this.claims.set(resource, claim);
+    this.log.info(`LOCK_REQUEST lamport=${claim.request!.requested_at} leader=${this.leader?.name ?? null} `
+                  + `resource=${resource}`);
+    await this.sendLockRequest(claim);
+    await granted.promise;
   }
 
-  private async sendLockRequest(quiet = false): Promise<void> {
-    this.lockRequestSent = monotonic();
+  private async sendLockRequest(claim: Claim, quiet = false): Promise<void> {
+    claim.sent = monotonic();
     const leader = this.leader;
-    const request = this.lockRequest;
+    const request = claim.request;
     if (leader === null || request === null) {
       return;  // The next leader's coordinator message collects the request.
     }
@@ -955,45 +1017,54 @@ export class Peer {
       await this.call(leader, "lock_request", { ...request }, { quiet });
     } catch (error) {
       // A replacement leader collects the request when it takes over; the periodic resend covers the rest.
-      this.event("LOCK_REQUEST_FAILED", `leader=${leader.name} error=${errorText(error)}`, true);
+      this.event("LOCK_REQUEST_FAILED", `leader=${leader.name} error=${errorText(error)} resource=${request.resource}`, true);
     }
   }
 
   /** Leave the critical section and tell the leader. */
-  async release(): Promise<void> {
-    if (this.lockState !== "held") {
+  async release(resource = MINUTES): Promise<void> {
+    const claim = this.claims.get(resource);
+    if (claim?.state !== "held") {
       return;
     }
-    this.lockState = "idle";
-    this.lockRequest = null;
-    this.lockGranted = null;
+    this.claims.delete(resource);
     const leader = this.leader;
-    this.event("LOCK_RELEASE", `leader=${leader?.name ?? null}`);
+    this.event("LOCK_RELEASE", `leader=${leader?.name ?? null} resource=${resource}`);
     if (leader === null) {
       return;
     }
     try {
-      await this.call(leader, "lock_release", { peer: this.me });
+      await this.call(leader, "lock_release", { peer: this.me, resource });
     } catch (error) {
       // This peer holds nothing either way; the leader's holder check or a new leader's recovery sees that.
-      this.event("LOCK_RELEASE_FAILED", `leader=${leader.name} error=${errorText(error)}`, true);
+      this.event("LOCK_RELEASE_FAILED", `leader=${leader.name} error=${errorText(error)} resource=${resource}`, true);
     }
   }
 
-  /** Resend a waiting request; as leader, take the lock back from a holder that died or whose release was lost. */
+  /** Resend waiting requests; as leader, take locks back from holders that died or whose release was lost. */
   private async checkLock(): Promise<void> {
-    if (this.lockState === "waiting" && monotonic() - this.lockRequestSent >= LOCK_RETRY) {
-      await this.sendLockRequest(true);
+    for (const claim of [...this.claims.values()]) {
+      if (claim.state === "waiting" && monotonic() - claim.sent >= LOCK_RETRY) {
+        await this.sendLockRequest(claim, true);
+      }
     }
-    const holder = this.lockHolder;
-    if (this.leader?.id !== this.me.id || !this.lockReady || holder === null || holder.id === this.me.id
-        || this.grantPending !== null) {
+    if (this.leader?.id !== this.me.id || !this.lockReady) {
       return;
     }
-    const grant = this.grantSeq;
+    for (const [resource, grant] of [...this.grants]) {
+      await this.checkHolder(resource, grant);
+    }
+  }
+
+  private async checkHolder(resource: string, grant: Grant): Promise<void> {
+    const holder = grant.holder;
+    if (holder === null || holder.id === this.me.id || grant.pending !== null) {
+      return;
+    }
+    const seq = grant.seq;
     let reason = "released";
     try {
-      if ((await this.call(holder, "lock_held", {}, { quiet: true })).held) {
+      if ((await this.call(holder, "lock_held", { resource }, { quiet: true })).held) {
         return;
       }
     } catch (error) {
@@ -1003,10 +1074,11 @@ export class Peer {
       reason = error.message;
     }
     // Only act on the grant that was asked about; a newer grant may have gone out while waiting for the answer.
-    if (this.lockHolder?.id === holder.id && this.grantSeq === grant && this.grantPending === null) {
-      this.lockHolder = null;
-      this.event("LOCK_HOLDER_LOST", `peer=${holder.name} reason=${reason}`, true);
-      await this.grantNext();
+    if (this.grants.get(resource) === grant && grant.holder?.id === holder.id && grant.seq === seq
+        && grant.pending === null) {
+      grant.holder = null;
+      this.event("LOCK_HOLDER_LOST", `peer=${holder.name} reason=${reason} resource=${resource}`, true);
+      await this.grantNext(resource);
     }
   }
 
@@ -1015,93 +1087,101 @@ export class Peer {
     if (this.leader?.id !== this.me.id) {
       throw new Error(`Not the leader; the leader is ${this.leader?.name ?? "unknown"}`);
     }
-    if (this.lockHolder?.id === request.peer.id) {
-      if (this.lockReady && this.grantPending === null) {
-        this.background(this.sendGrant(request.peer), "LOCK_GRANT");  // The first grant was lost.
+    const grant = this.grantFor(request.resource);
+    if (grant.holder?.id === request.peer.id) {
+      if (this.lockReady && grant.pending === null) {
+        this.background(this.sendGrant(request.resource, request.peer), "LOCK_GRANT");  // The first grant was lost.
       }
       return { status: "holder" };
     }
-    if (!this.lockQueue.some((queued) => queued.peer.id === request.peer.id)) {
-      this.lockQueue.push(request);
-      this.lockQueue.sort(requestOrder);
+    if (!grant.queue.some((queued) => queued.peer.id === request.peer.id)) {
+      grant.queue.push(request);
+      grant.queue.sort(requestOrder);
       this.event("LOCK_QUEUED", `peer=${request.peer.name} requested_at=${request.requested_at} `
-                                + `queue=${describeQueue(this.lockQueue)}`);
+                                + `queue=${describeQueue(grant.queue)} resource=${request.resource}`);
     }
-    this.background(this.grantNext(), "LOCK_GRANT");
+    this.background(this.grantNext(request.resource), "LOCK_GRANT");
     return { status: "queued" };
   }
 
   private onLockRelease(body: Body): Body {
     const peer = checkRef(body.peer);
+    const resource = checkName(body.resource);
     if (this.leader?.id !== this.me.id) {
       return { status: "ignored" };
     }
     if (!this.lockReady) {
-      this.earlyReleases.add(peer.id);
+      this.earlyReleases.add(`${resource} ${peer.id}`);
       return { status: "noted" };
     }
-    if (this.lockHolder?.id !== peer.id) {
+    const grant = this.grants.get(resource);
+    if (grant?.holder?.id !== peer.id) {
       return { status: "ignored" };
     }
-    this.lockHolder = null;
-    this.event("LOCK_RELEASED", `peer=${peer.name} queue=${describeQueue(this.lockQueue)}`);
-    this.background(this.grantNext(), "LOCK_GRANT");
+    grant.holder = null;
+    this.event("LOCK_RELEASED", `peer=${peer.name} queue=${describeQueue(grant.queue)} resource=${resource}`);
+    this.background(this.grantNext(resource), "LOCK_GRANT");
     return { status: "released" };
   }
 
-  /** Give a free lock to the queued request with the smallest Lamport time. */
-  private async grantNext(): Promise<void> {
-    if (this.leader?.id !== this.me.id || !this.lockReady || this.lockHolder !== null) {
+  /** Give a free lock to its queued request with the smallest Lamport time. */
+  private async grantNext(resource: string): Promise<void> {
+    const grant = this.grants.get(resource);
+    if (this.leader?.id !== this.me.id || !this.lockReady || grant === undefined || grant.holder !== null) {
       return;
     }
-    const next = this.lockQueue.shift();
+    const next = grant.queue.shift();
     if (next === undefined) {
       return;
     }
-    this.lockHolder = next.peer;
-    this.grantSeq += 1;
-    this.event("LOCK_GRANT", `to=${next.peer.name} requested_at=${next.requested_at} queue=${describeQueue(this.lockQueue)}`);
-    await this.sendGrant(next.peer);
+    grant.holder = next.peer;
+    grant.seq += 1;
+    this.event("LOCK_GRANT", `to=${next.peer.name} requested_at=${next.requested_at} queue=${describeQueue(grant.queue)} `
+                             + `resource=${resource}`);
+    await this.sendGrant(resource, next.peer);
   }
 
-  private async sendGrant(peer: PeerRef): Promise<void> {
+  private async sendGrant(resource: string, peer: PeerRef): Promise<void> {
+    const grant = this.grantFor(resource);
     const term = this.term;
-    this.grantPending = peer.id;
+    grant.pending = peer.id;
     try {
-      await this.call(peer, "lock_grant", { leader: this.me, term });
+      await this.call(peer, "lock_grant", { leader: this.me, term, resource });
     } catch (error) {
       if (error instanceof NetworkError) {
         // The grant may still have arrived, so the lock stays reserved until the holder check asks the peer.
-        this.event("LOCK_GRANT_FAILED", `peer=${peer.name} error=${error.message}`, true);
-      } else if (this.lockHolder?.id === peer.id && this.term === term) {
+        this.event("LOCK_GRANT_FAILED", `peer=${peer.name} error=${error.message} resource=${resource}`, true);
+      } else if (grant.holder?.id === peer.id && this.term === term) {
         // The peer refused: it is not waiting under this term, so it is not using the resource.
-        this.lockHolder = null;
-        this.event("LOCK_GRANT_REFUSED", `peer=${peer.name} error=${errorText(error)}`, true);
-        this.grantPending = null;
-        await this.grantNext();
+        grant.holder = null;
+        this.event("LOCK_GRANT_REFUSED", `peer=${peer.name} error=${errorText(error)} resource=${resource}`, true);
+        grant.pending = null;
+        await this.grantNext(resource);
       }
     } finally {
-      if (this.grantPending === peer.id) {
-        this.grantPending = null;
+      if (grant.pending === peer.id) {
+        grant.pending = null;
       }
     }
   }
 
   private onLockGrant(body: Body): Body {
     const leader = checkRef(body.leader);
+    const resource = checkName(body.resource);
     if (leader.id !== this.leader?.id || body.term !== this.term) {
       throw new Error(`Grant from ${leader.name} in term ${body.term}, but the leader is `
                       + `${this.leader?.name ?? "unknown"} in term ${this.term}`);
     }
-    if (this.lockState === "held") {
+    const claim = this.claims.get(resource);
+    if (claim?.state === "held") {
       return { status: "held" };  // A resent grant.
     }
-    if (this.lockState !== "waiting") {
-      throw new Error("Not waiting for the lock");
+    if (claim?.state !== "waiting") {
+      throw new Error(`Not waiting for the ${resource} lock`);
     }
-    this.lockState = "held";
-    this.event("LOCK_ACQUIRED", `from=${leader.name} requested_at=${this.lockRequest?.requested_at}`);
-    this.lockGranted?.resolve();
+    claim.state = "held";
+    this.event("LOCK_ACQUIRED", `from=${leader.name} requested_at=${claim.request?.requested_at} resource=${resource}`);
+    claim.granted?.resolve();
     return { status: "held" };
   }
 
@@ -1282,10 +1362,11 @@ export class Peer {
       term: this.term,
       lamport: this.clock.time,
       lock: {
-        state: this.lockState,
         ready: this.lockReady,
-        holder: this.lockHolder?.name ?? null,
-        queue: this.lockQueue.map((request) => request.peer.name),
+        mine: Object.fromEntries([...this.claims].map(([resource, claim]) => [resource, claim.state])),
+        grants: Object.fromEntries([...this.grants].map(([resource, grant]) => [resource, {
+          holder: grant.holder?.name ?? null, queue: grant.queue.map((request) => request.peer.name),
+        }])),
       },
     };
   }
