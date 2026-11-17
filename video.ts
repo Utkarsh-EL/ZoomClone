@@ -44,6 +44,17 @@ export interface FrameAudit {
   inOrder: boolean;      // Every presenter's frames arrived in sequence order.
 }
 
+/** An HSL color as #rrggbb; hex renders in every SVG viewer, while some do not understand hsl(). */
+function hex(hue: number, saturation: number, lightness: number): string {
+  const s = saturation / 100, l = lightness / 100;
+  const a = s * Math.min(l, 1 - l);
+  const channel = (n: number): string => {
+    const k = (n + hue / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, "0");
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
 /** A generated test-pattern frame: an SVG data URL with the presenter's name, the frame number and a moving bar. */
 export function testPatternFrame(presenter: string, seq: number): string {
   let hue = 0;
@@ -52,12 +63,12 @@ export function testPatternFrame(presenter: string, seq: number): string {
   }
   const x = (seq * 14) % 300;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">`
-    + `<rect width="320" height="180" fill="hsl(${hue},45%,22%)"/>`
+    + `<rect width="320" height="180" fill="${hex(hue, 45, 22)}"/>`
     + [0, 1, 2, 3, 4, 5, 6].map((i) => `<rect x="${i * 46}" y="128" width="46" height="18" `
-      + `fill="hsl(${(hue + i * 51) % 360},70%,60%)"/>`).join("")
-    + `<rect x="${x}" y="0" width="20" height="120" fill="hsla(0,0%,100%,0.18)"/>`
+      + `fill="${hex((hue + i * 51) % 360, 70, 60)}"/>`).join("")
+    + `<rect x="${x}" y="0" width="20" height="120" fill="#ffffff" fill-opacity="0.18"/>`
     + `<text x="16" y="52" font-family="Arial" font-size="30" font-weight="bold" fill="#fff">${presenter}</text>`
-    + `<text x="16" y="84" font-family="Arial" font-size="16" fill="hsl(${hue},80%,82%)">test pattern</text>`
+    + `<text x="16" y="84" font-family="Arial" font-size="16" fill="${hex(hue, 80, 82)}">test pattern</text>`
     + `<text x="304" y="170" text-anchor="end" font-family="Courier New" font-size="13" fill="#fff">frame ${seq}</text>`
     + `</svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;

@@ -130,7 +130,7 @@ It takes about 17 seconds and prints `RESULT: PASS`. `ora` hosts the meeting, al
 
 1. The peers form a ring and elect `alpha`.
 2. `ora` hosts `demo-room`, and every peer joins it.
-3. Without the lock, `sierra` and `xray` share 20 test-pattern frames each at the same time. The viewers see the two streams cut into each other (34 runs instead of 2).
+3. Without the lock, `sierra` and `xray` share 20 test-pattern frames each at the same time. The viewers see the two streams cut into each other (33 runs instead of 2).
 4. With the lock, both ask at once. The viewers see all of `sierra`'s 20 frames, then all of `xray`'s.
 5. `sierra` starts a 60-frame presentation, and `xray` asks to share and waits. The leader `alpha` is killed in the middle. `xray` becomes leader in 0.1 s, finds `sierra` still presenting and itself next, and the viewers see `sierra` 1 to 60, then `xray` 1 to 20. The longest pause in `sierra`'s video at a viewer was 113 ms, against 100 ms between frames.
 6. Every logged message is checked for send-before-receive in Lamport time, and the four locked presentations are checked to follow each other in Lamport order with no overlap.
