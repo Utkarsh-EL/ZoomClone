@@ -17,10 +17,15 @@ const PROVIDER = "sierra";    // Stays clear of the peers that leave and crash u
 const LOG_LINE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}Z /;
 let LOG: Logger = quietLogger;
 
+/** Send the shared demo helpers' log lines to this logger. */
+export function useLogger(logger: Logger): void {
+  LOG = logger;
+}
+
 type Statuses = Record<string, Body>;
 
 /** Peer processes owned by the demo, reachable by name. */
-class Network {
+export class Network {
   target: string;
   processes = new Map<string, ChildProcess>();
   addresses = new Map<string, Address>();
@@ -30,11 +35,12 @@ class Network {
     this.target = target;
   }
 
-  async startPeer(name: string, bootstrap?: string): Promise<void> {
+  async startPeer(name: string, bootstrap?: string, extra: string[] = []): Promise<void> {
     const port = await freeLocalPort();
-    const output = openSync(join(this.target, `${name}.console.txt`), "w");
+    // Append, so a peer restarted under the same name keeps its earlier log.
+    const output = openSync(join(this.target, `${name}.console.txt`), "a");
     this.handles.push(output);
-    const command = [join(ROOT, "peer.ts"), "--name", name, "--port", String(port), "--log-dir", this.target];
+    const command = [join(ROOT, "peer.ts"), "--name", name, "--port", String(port), "--log-dir", this.target, ...extra];
     if (bootstrap) {
       command.push("--bootstrap", `127.0.0.1:${this.addresses.get(bootstrap)![1]}`);
     }
@@ -112,7 +118,7 @@ class Network {
   }
 }
 
-function check(condition: boolean, description: string): void {
+export function check(condition: boolean, description: string): void {
   if (!condition) {
     throw new Error(`Check failed: ${description}`);
   }
@@ -123,7 +129,7 @@ function ownerSuccessor(statuses: Statuses, owner: string): string {
   return statuses[owner].successors[0].name;
 }
 
-function step(text: string): void {
+export function step(text: string): void {
   LOG.info(`===== ${text} =====`);
 }
 
@@ -221,7 +227,7 @@ async function runScenario(network: Network): Promise<void> {
 }
 
 /** Merge every process's log into one file ordered by timestamp. */
-function writeTranscript(target: string): string {
+export function writeTranscript(target: string, title = "CECS 327 Milestone 3: merged peer logs"): string {
   const lines: string[] = [];
   for (const file of readdirSync(target).filter((name) => name.endsWith(".console.txt")).sort()) {
     for (const line of readFileSync(join(target, file), "utf8").split(/\r?\n/)) {
@@ -233,7 +239,7 @@ function writeTranscript(target: string): string {
   // The sort is stable and keys only on the timestamp, so each process keeps its own order.
   lines.sort((a, b) => (a.slice(0, 23) < b.slice(0, 23) ? -1 : a.slice(0, 23) > b.slice(0, 23) ? 1 : 0));
   const transcript = join(target, "demo_transcript.txt");
-  writeFileSync(transcript, `CECS 327 Milestone 3: merged peer logs (UTC timestamps)\n\n${lines.join("\n")}\n`, "utf8");
+  writeFileSync(transcript, `${title} (UTC timestamps)\n\n${lines.join("\n")}\n`, "utf8");
   return transcript;
 }
 

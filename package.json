@@ -6,9 +6,10 @@
     "node": ">=24.16"
   },
   "scripts": {
-    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts",
+    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts",
     "typecheck": "tsc",
-    "demo": "node p2p_demo.ts"
+    "demo": "node p2p_demo.ts",
+    "demo:coordination": "node coord_demo.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
