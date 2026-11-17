@@ -6,7 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { prepareOutput, ROOT } from "./demo.ts";
 import { auditMinutes, readMinutes, type MinutesAudit } from "./minutes.ts";
-import { check, Network, step, useLogger, writeTranscript } from "./p2p_demo.ts";
+import { check, Network, step, useLogger as useSharedLogger, writeTranscript } from "./p2p_demo.ts";
 import { RemoteError, RPC_TIMEOUT, rpc } from "./peer.ts";
 import { configureLogging, NetworkError, parseCli, quietLogger, type Body, type Logger } from "./protocol.ts";
 
@@ -23,13 +23,19 @@ const LINE = /^(\S+ \S+)Z (INFO|WARNING|ERROR) (\S+) (.*)$/;
 const MESSAGE = /^(SEND|RECV) (?:to|from)=\S+ type=(\S+) id=(\w+) lamport=(\d+)/;
 let LOG: Logger = quietLogger;
 
+/** Send this module's and the shared demo helpers' log lines to this logger. */
+export function useLogger(logger: Logger): void {
+  LOG = logger;
+  useSharedLogger(logger);
+}
+
 interface Leader {
   name: string;
   term: number;
 }
 
 /** Wait until every peer follows one leader (the expected one, if named) whose lock recovery has finished. */
-async function waitForLeader(network: Network, expected?: string, seconds = 30): Promise<Leader> {
+export async function waitForLeader(network: Network, expected?: string, seconds = 30): Promise<Leader> {
   const deadline = performance.now() + seconds * 1000;
   for (;;) {
     try {
@@ -77,7 +83,7 @@ interface LogLine {
   text: string;
 }
 
-function peerLines(target: string): LogLine[] {
+export function peerLines(target: string): LogLine[] {
   const lines: LogLine[] = [];
   for (const file of readdirSync(target).filter((name) => name.endsWith(".console.txt") && name !== "demo.console.txt")) {
     for (const raw of readFileSync(join(target, file), "utf8").split(/\r?\n/)) {
@@ -102,7 +108,7 @@ function logTime(): string {
 }
 
 /** Check that every message's receive is later than its send on the Lamport clock, and write the Lamport-ordered log. */
-function checkEventOrder(target: string): void {
+export function checkEventOrder(target: string): void {
   const lines = peerLines(target);
   const sends = new Map<string, number>();
   const receives = new Map<string, number>();
@@ -204,8 +210,7 @@ async function main(): Promise<void> {
   });
   const target = prepareOutput(values["output-dir"], (file) => file.endsWith(".log") || file.endsWith(".console.txt")
     || file.endsWith(".jsonl") || file === "demo_transcript.txt" || file === "lamport_order.txt");
-  LOG = configureLogging("demo", target);
-  useLogger(LOG);
+  useLogger(configureLogging("demo", target));
   const network = new Network(target);
   let code: number;
   try {

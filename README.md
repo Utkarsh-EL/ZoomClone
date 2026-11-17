@@ -2,7 +2,9 @@
 
 This milestone adds coordination to the Milestone 3 peer-to-peer overlay. Every peer keeps a Lamport logical clock and stamps it on every message. The peers elect a leader with a ring election that runs over the overlay's own successor pointers. The leader runs a lock that protects a shared resource: the meeting minutes, a file that every peer appends to. When the leader fails, the survivors elect a new one, and it rebuilds the lock state before it grants anything. No two peers ever edit the minutes at once.
 
-The prototype coordinates meetings and messages. It does not transmit microphone or camera data.
+The same leader also runs a second lock, the presenter slot, which makes video sharing safe: one peer at a time shares a camera, a screen or a test pattern with everyone in the meeting. Each peer can serve a page on `127.0.0.1` to watch and share.
+
+The prototype shares video frames (JPEG or SVG images, about 8 to 10 per second). It does not carry audio.
 
 ## What the coordination layer does
 
@@ -13,7 +15,7 @@ The prototype coordinates meetings and messages. It does not transmit microphone
 | Leader election | Ring election: `Peer.startElection`, `onElection`, `onElected`, `onCoordinator` |
 | Mutual exclusion | Centralized lock run by the leader: `Peer.acquire`, `Peer.release`, `onLockRequest`, `grantNext` |
 | Event ordering | Lock queue ordered by (Lamport time, ring ID); `coord_demo.ts` writes a Lamport-ordered log |
-| Shared resource | `minutes.ts`: meeting minutes numbered by a read-modify-write |
+| Shared resource | `minutes.ts`: meeting minutes numbered by a read-modify-write; `video.ts`: the presenter slot for video sharing |
 | Leader failure | Followers ping the leader; a failure starts an election, and the coordinator message recovers the lock state |
 
 Ring IDs come from `SHA-1(name) mod 2^16`, so the same names always give the same ring: `ora` 811, `sierra` 13800, `xray` 40128, `alpha` 52303. An election picks the highest ID, so `alpha` wins, and `xray` wins once `alpha` is gone.
@@ -49,12 +51,12 @@ Results of the committed run:
 
 | Measurement | Value |
 | --- | --- |
-| Unprotected run | 15 of 20 entries collided, 15 entry numbers used twice |
+| Unprotected run | 16 of 20 entries collided, 14 entry numbers used twice |
 | Locked run | 20 entries, 0 collisions, entry order equals Lamport order |
 | Lock cost | 3 messages per entry for a peer that is not the leader (request, grant, release); the leader's own entries need none |
-| Leader crash to new leader ready | 0.1 s on localhost, where a dead port refuses connections at once |
+| Leader crash to new leader ready | 0.2 s on localhost, where a dead port refuses connections at once |
 | Failover run | 24 entries, 0 collisions, entry order equals Lamport order |
-| Message pairs checked | 121, every receive later than its send |
+| Message pairs checked | 124, every receive later than its send |
 
 ## How it works
 
@@ -88,7 +90,7 @@ Concurrent elections (several peers notice the same failure) all pick the same w
 
 ### Mutual exclusion: centralized lock run by the leader
 
-The elected leader is the lock coordinator. To enter the critical section, a peer sends `lock_request` with `requested_at`, the Lamport time of the request. The leader queues requests in (Lamport time, ring ID) order, which is the same total order on every peer, and sends `lock_grant` to the first one when the lock is free. The holder sends `lock_release` when it leaves. That makes 3 messages per entry, against 2(N-1) for Ricart-Agrawala, and nothing circulates while the lock is idle, unlike token ring.
+The elected leader is the lock coordinator. Each lock protects one named resource (`minutes` or `presenter`) and has its own holder and queue, so a long presentation never blocks the minutes. To enter the critical section, a peer sends `lock_request` with `resource` and `requested_at`, the Lamport time of the request. The leader queues requests in (Lamport time, ring ID) order, which is the same total order on every peer, and sends `lock_grant` to the first one when the lock is free. The holder sends `lock_release` when it leaves. That makes 3 messages per entry, against 2(N-1) for Ricart-Agrawala, and nothing circulates while the lock is idle, unlike token ring.
 
 The leader is a single point of failure, so the lock is built to survive losing it:
 
@@ -107,6 +109,53 @@ The audit needs no clock. An entry's number is the count its writer read, plus o
 
 Lamport times give a total order: sort by Lamport time, and break ties by peer name. The order agrees with causality, so a send always comes before its receive, and one writer's `CS_EXIT` always comes before the next writer's `CS_ENTER`. The release, the grant and the acquire form a chain of messages between them. `lamport_order.txt` shows the whole run in this order. The wall-clock transcript cannot do the same. Lines from different processes in the same millisecond can appear out of causal order, and the minutes check in step 4 shows that entry order and Lamport order agree.
 
+## Video sharing: one presenter at a time
+
+A meeting has one stage. Every peer in the meeting watches it, and the right to present is the `presenter` lock, run by the elected leader like the minutes lock. A peer that asks to share while someone else presents waits in the leader's queue, in Lamport order, and starts as soon as the presenter stops.
+
+1. A peer joins a meeting by looking it up in the overlay and connecting to its coordinator as a participant.
+2. To share, it acquires the `presenter` lock, sends `video_frame` messages, then releases the lock.
+3. The coordinator relays each frame to every other member before it replies. The presenter waits for that reply before sending the next frame or releasing the lock, so its last frame reaches every viewer before the next presenter's first frame.
+4. Frames are JPEG or SVG data URLs of at most 60,000 characters, so each fits one protocol line. The coordinator rejects anything else.
+
+The leader carries no video, so a leader crash does not interrupt a presentation. The new leader's recovery finds the presenter still holding the slot and keeps everyone else's place in the queue. If a presenter's page stops sending frames for 5 s (a closed tab, for example), its peer gives the slot back. If the presenting peer itself dies, the leader's holder check frees the slot.
+
+### Run the video demo (one command)
+
+```sh
+node video_demo.ts
+```
+
+It takes about 17 seconds and prints `RESULT: PASS`. `ora` hosts the meeting, all four peers join, and `ora` and `alpha` watch:
+
+1. The peers form a ring and elect `alpha`.
+2. `ora` hosts `demo-room`, and every peer joins it.
+3. Without the lock, `sierra` and `xray` share 20 test-pattern frames each at the same time. The viewers see the two streams cut into each other (34 runs instead of 2).
+4. With the lock, both ask at once. The viewers see all of `sierra`'s 20 frames, then all of `xray`'s.
+5. `sierra` starts a 60-frame presentation, and `xray` asks to share and waits. The leader `alpha` is killed in the middle. `xray` becomes leader in 0.1 s, finds `sierra` still presenting and itself next, and the viewers see `sierra` 1 to 60, then `xray` 1 to 20. The longest pause in `sierra`'s video at a viewer was 113 ms, against 100 ms between frames.
+6. Every logged message is checked for send-before-receive in Lamport time, and the four locked presentations are checked to follow each other in Lamport order with no overlap.
+
+Output goes to `evidence/video_run/`: the logs as for the coordination demo, `video_frames_<run>.txt` (what each viewer saw, as runs of frames), and `frame_sample.svg` (one test-pattern frame).
+
+### Share from a browser
+
+Start each peer with `--http PORT`, host a meeting at one of them, then open each peer's page:
+
+```sh
+node peer.ts --name ora    --port 7001 --http 8001
+node peer.ts --name sierra --port 7002 --http 8002 --bootstrap 127.0.0.1:7001
+node peer.ts --name xray   --port 7003 --http 8003 --bootstrap 127.0.0.1:7001
+```
+
+At `ora`'s terminal, type `host demo-room`. Then open `http://127.0.0.1:8001/`, `http://127.0.0.1:8002/` and `http://127.0.0.1:8003/`, and press **Join** on each page. The page shows:
+
+- The stage, with the presenter's name and frame number on the bar at the bottom.
+- A tally light across the top: red while you present, amber while you wait for the slot.
+- **Share camera**, **Share screen** and **Share test pattern**.
+- The leader, the term and this peer's Lamport clock. On the leader's page, also the slot's holder and queue.
+
+The page captures the camera or screen into 480 by 270 JPEG frames at about 8 per second, keeping one frame in flight. It plays incoming frames as images. Pages are served only on `127.0.0.1`, which is also what lets the browser allow camera and screen capture.
+
 ## Run the coordinating peers by hand
 
 Start four peers as in [Start each service by hand](#start-each-service-by-hand). They share `logs/minutes.jsonl` unless `--minutes PATH` names another file, and peers that should coordinate must name the same file. Useful commands at a peer's terminal:
@@ -117,13 +166,14 @@ Start four peers as in [Start each service by hand](#start-each-service-by-hand)
 | `elect` | Start a ring election from this peer |
 | `append COUNT` | Write COUNT entries to the minutes, each under the lock |
 | `append COUNT unsafe` | Write COUNT entries with no lock, to see collisions |
+| `host MEETING` | Host a meeting; peers join it from their pages to watch and share video |
 | `crash` | Kill this peer; crash the leader to watch the survivors elect a new one |
 
-The log lines to watch are `ELECTION_START`, `ELECTION_RESULT`, `LEADER_ELECTED`, `LEADER_ACCEPTED`, `LEADER_LEARNED`, `LEADER_STEPPED_DOWN`, `LEADER_FAILED`, `LOCK_STATE_RECOVERED`, `LOCK_REQUEST`, `LOCK_QUEUED`, `LOCK_GRANT`, `LOCK_ACQUIRED`, `CS_ENTER`, `CS_EXIT`, `LOCK_RELEASE`, `LOCK_RELEASED` and `LOCK_HOLDER_LOST`.
+The log lines to watch are `ELECTION_START`, `ELECTION_RESULT`, `LEADER_ELECTED`, `LEADER_ACCEPTED`, `LEADER_LEARNED`, `LEADER_STEPPED_DOWN`, `LEADER_FAILED`, `LOCK_STATE_RECOVERED`, `LOCK_REQUEST`, `LOCK_QUEUED`, `LOCK_GRANT`, `LOCK_ACQUIRED`, `CS_ENTER`, `CS_EXIT`, `LOCK_RELEASE`, `LOCK_RELEASED`, `LOCK_HOLDER_LOST`, `VIDEO_JOIN`, `VIDEO_SHARE_START`, `VIDEO_SHARE_STOP` and, at the meeting host, `VIDEO_FRAME` (first frame and every 50th). Each LOCK line ends with the `resource` it is about.
 
 ## Coordination tests
 
-`npm test` runs `tests/coordination.test.ts` with the other suites:
+`npm test` runs `tests/coordination.test.ts` and `tests/video.test.ts` with the other suites:
 
 | Scenario | Test | Expected result |
 | --- | --- | --- |
@@ -137,8 +187,17 @@ The log lines to watch are `ELECTION_START`, `ELECTION_RESULT`, `LEADER_ELECTED`
 | Mutual exclusion | `the lock serializes concurrent writers in Lamport order` | 16 entries, no collision, Lamport order |
 | Failover under load | `leader crash during contention keeps the minutes consistent` | 18 entries, no collision, Lamport order |
 | Holder survives failover | `a lock held when the leader crashes stays with its holder` | New leader finds the holder; nobody else gets the lock until it releases |
+| Independent locks | `named locks are independent: holding presenter does not block minutes` | Minutes written while the slot is held; one presenter at a time |
+| Slot survives failover | `the presenter keeps the slot across a leader crash, and a waiter keeps its place` | New leader finds the presenter and the queue |
 | Holder fails | `a crashed lock holder does not block the others` | The next peer gets the lock |
 | Stale grant | `a grant from a peer that is not the leader is refused` | Error reply; peer stays idle |
+| Frames and audit | `test-pattern frames are valid frames, and the audit spots mixed streams` (`tests/video.test.ts`) | Valid frames pass, others fail; mixed streams counted |
+| Relay | `the meeting relays a frame to everyone but its presenter` | Two deliveries, none back to the presenter; bad frames refused |
+| Page from the command line | `the peer command serves its meeting page` | `node peer.ts --http` serves the page |
+| Video needs the lock | `without the presenter lock, two streams interleave at a viewer` | Streams mixed |
+| Presenter slot | `with the presenter lock, presenters take turns and viewers see whole streams` | 2 whole runs at each viewer |
+| Video through failover | `a presentation keeps going through a leader crash, and the next presenter keeps its place` | `sierra 1-30, xray 1-10`; no pause of a second |
+| Meeting page | `the meeting page serves, refuses stray frames, and shares the test pattern` | Page served; stray frame refused; slot given back on stop |
 
 ## Coordination protocol
 
@@ -152,6 +211,8 @@ These requests use the same JSON-lines wire format as the overlay (see [Peer pro
 | `lock_request`, `lock_grant`, `lock_release` | Centralized lock |
 | `lock_held` | Leader asks the holder whether it still holds the lock |
 | `append`, `elect` | Requests from the demo or a script: write minutes, start an election |
+| `video_join`, `video_share`, `video_stop`, `video_stats`, `video_reset` | Requests from the demo or a script: join a meeting, present the test pattern, read what this peer saw |
+| `video_frame` | Meeting coordinator message (not peer to peer): one frame from the presenter, relayed to every other member |
 
 ## Coordination limitations
 
@@ -160,6 +221,9 @@ These requests use the same JSON-lines wire format as the overlay (see [Peer pro
 - **Recovery trusts the ring.** The coordinator message must visit every live peer. A live peer wrongly skipped as dead while it holds the lock would not be reported.
 - **Elections need a stable ring.** An election reaches only the peers the ring links at that moment. One run during heavy churn can miss a peer, and a later election corrects it.
 - **The minutes file must be reachable by every peer.** The demo runs on one machine. On separate computers, the file would have to be on a shared drive.
+- **Video goes through one coordinator.** The meeting's host relays every frame, so its upload grows with the number of viewers, and the meeting ends if the host fails. Frames are images, not a compressed video stream, so they use more bandwidth than a real codec.
+- **Camera and screen capture need a secure page.** Browsers allow them on `http://127.0.0.1` and `http://localhost`, not on plain `http://` to a LAN address. The pages bind only to `127.0.0.1`.
+- **No audio.**
 - **No security.** Any host that can reach a peer can claim to be the leader or send a grant.
 
 # Milestone 3: Peer-to-Peer Overlay for Meeting Discovery
@@ -351,10 +415,13 @@ Client commands are `members`, `info`, `subscribe TOPIC`, `publish TOPIC TEXT`, 
 | --- | --- |
 | `peer.ts` | Peer node: ring membership, stabilization, routing, records, meeting hosting, Lamport clock, leader election, lock, command line |
 | `minutes.ts` | Shared meeting minutes: read-modify-write entries and the collision audit |
+| `video.ts` | Video sharing: the presenter slot, frame relay through the meeting, test pattern, frame audit, the meeting page's server |
+| `video.html` | The meeting page: stage, presenter slot, camera and screen capture |
 | `coord_demo.ts` | Multi-process coordination scenario with checks; saves evidence |
+| `video_demo.ts` | Multi-process video-sharing scenario with checks; saves evidence |
 | `p2p_demo.ts` | Multi-process overlay scenario with checks; saves evidence |
 | `protocol.ts` | Packet creation, JSON encoding and decoding, framing, Lamport clock, UTC logging |
-| `server.ts` | Meeting coordinator: membership, subscriptions, request routing, publish and group fan-out |
+| `server.ts` | Meeting coordinator: membership, subscriptions, request routing, publish, group fan-out and video frame relay |
 | `client.ts` | Participant API and command line; `--via` finds the meeting through a peer |
 | `demo.ts`, `demo_node.ts` | Milestone 2 multi-process scenario |
 | `tests/` | Protocol, socket integration, overlay and coordination tests |

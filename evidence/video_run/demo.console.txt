@@ -1,0 +1,37 @@
+2026-11-17 20:07:07,572Z INFO demo Logging started; trace_marshalling=false
+2026-11-17 20:07:07,574Z INFO demo ===== STEP 1: ora starts and the others join; sierra runs an election and alpha leads =====
+2026-11-17 20:07:08,217Z INFO demo LEADER_AGREED leader=ora term=1 peers=ora
+2026-11-17 20:07:09,762Z INFO demo RING peers=4 ora(811) -> sierra(13800) -> xray(40128) -> alpha(52303) -> ora
+2026-11-17 20:07:09,822Z INFO demo LEADER_AGREED leader=alpha term=2 peers=ora,sierra,xray,alpha
+2026-11-17 20:07:09,822Z INFO demo ===== STEP 2: ora hosts demo-room; every peer joins it to watch =====
+2026-11-17 20:07:09,831Z INFO demo HOST_RESULT {"host":"127.0.0.1","port":1300,"peer":"ora"}
+2026-11-17 20:07:09,851Z INFO demo CHECK ok: all four peers joined the meeting
+2026-11-17 20:07:09,851Z INFO demo ===== STEP 3: without the presenter lock, sierra and xray share 20 frames at the same time =====
+2026-11-17 20:07:11,854Z INFO demo VIDEO_AUDIT run=unprotected viewer=ora frames=40 presenters=2 runs=34 interleaved=32 in_order=true
+2026-11-17 20:07:11,856Z INFO demo VIDEO_AUDIT run=unprotected viewer=alpha frames=40 presenters=2 runs=34 interleaved=32 in_order=true
+2026-11-17 20:07:11,859Z INFO demo CHECK ok: ora saw two streams mixed (34 runs)
+2026-11-17 20:07:11,859Z INFO demo CHECK ok: alpha saw two streams mixed (34 runs)
+2026-11-17 20:07:11,859Z INFO demo ===== STEP 4: with the presenter lock, sierra and xray ask to share 20 frames at the same time =====
+2026-11-17 20:07:15,890Z INFO demo VIDEO_AUDIT run=locked viewer=ora frames=40 presenters=2 runs=2 interleaved=0 in_order=true
+2026-11-17 20:07:15,891Z INFO demo VIDEO_AUDIT run=locked viewer=alpha frames=40 presenters=2 runs=2 interleaved=0 in_order=true
+2026-11-17 20:07:15,894Z INFO demo CHECK ok: ora saw one whole presentation after the other: sierra 1-20, xray 1-20
+2026-11-17 20:07:15,894Z INFO demo CHECK ok: alpha saw one whole presentation after the other: sierra 1-20, xray 1-20
+2026-11-17 20:07:15,894Z INFO demo ===== STEP 5: leader alpha crashes while sierra presents and xray waits for the slot =====
+2026-11-17 20:07:16,928Z INFO demo CRASH peer=alpha frames_seen_by_ora=11
+2026-11-17 20:07:16,988Z INFO demo LEADER_AGREED leader=xray term=3 peers=ora,sierra,xray
+2026-11-17 20:07:16,988Z INFO demo FAILOVER seconds=0.1 (crash to new leader ready)
+2026-11-17 20:07:16,989Z INFO demo SLOT_AFTER_RECOVERY holder=sierra queue=["xray"]
+2026-11-17 20:07:16,989Z INFO demo CHECK ok: the new leader xray found sierra presenting and itself next in line
+2026-11-17 20:07:23,920Z INFO demo VIDEO_GAP viewer=ora presenter=sierra longest_ms=113 frame_interval_ms=100
+2026-11-17 20:07:23,920Z INFO demo CHECK ok: the presentation ran to the end, then xray presented: no frame lost, none mixed
+2026-11-17 20:07:23,920Z INFO demo CHECK ok: sierra's video never paused for a second during the failover (longest gap 113 ms)
+2026-11-17 20:07:23,921Z INFO demo ===== STEP 6: event ordering across every peer's log =====
+2026-11-17 20:07:23,922Z INFO demo LAMPORT_PAIRS messages=50 receive_not_after_send=0
+2026-11-17 20:07:23,922Z INFO demo CHECK ok: all 50 logged messages were received at a later Lamport time
+2026-11-17 20:07:23,922Z INFO demo LAMPORT_ORDER lines=177 file=lamport_order.txt
+2026-11-17 20:07:23,924Z INFO demo PRESENTATION peer=sierra start_lamport=573 stop_lamport=810
+2026-11-17 20:07:23,924Z INFO demo PRESENTATION peer=xray start_lamport=821 stop_lamport=1066
+2026-11-17 20:07:23,924Z INFO demo PRESENTATION peer=sierra start_lamport=1097 stop_lamport=1721
+2026-11-17 20:07:23,924Z INFO demo PRESENTATION peer=xray start_lamport=1729 stop_lamport=1914
+2026-11-17 20:07:23,924Z INFO demo CHECK ok: 4 locked presentations follow each other in Lamport order with no overlap
+2026-11-17 20:07:23,924Z INFO demo RESULT: PASS
