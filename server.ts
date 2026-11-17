@@ -9,6 +9,9 @@ import {
 
 export const IDENTIFIER_RE = /^[A-Za-z0-9_.-]{1,32}$/;
 const MAX_CONTENT_CHARS = 4096;
+export const MAX_FRAME_CHARS = 60000;  // A frame plus its envelope must fit one 64 KiB line.
+const FRAME = /^data:image\/(jpeg|svg\+xml);base64,[A-Za-z0-9+/]+=*$/;
+const FRAME_LOG_EVERY = 50;
 
 /** Key a (meeting, name) pair in one map; identifiers never contain NUL, so keys sort like the pairs. */
 export function pair(meeting: string, name: string): string {
@@ -21,6 +24,11 @@ function isObject(value: unknown): value is Body {
 
 function isIdentifier(value: unknown): value is string {
   return typeof value === "string" && IDENTIFIER_RE.test(value);
+}
+
+/** A video frame is a base64 JPEG or SVG data URL, small enough to relay in one line. */
+export function isFrame(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_FRAME_CHARS && FRAME.test(value);
 }
 
 function isContent(value: unknown): value is string {
@@ -167,8 +175,8 @@ export class Session {
     this.socket.destroy();
   }
 
-  reply(incoming: Packet, body: Body): void {
-    this.sendPacket(message("reply", { request_id: incoming.id ?? null, body }));
+  reply(incoming: Packet, body: Body, quiet = false): void {
+    this.sendPacket(message("reply", { request_id: incoming.id ?? null, quiet, body }));
   }
 
   error(incoming: Packet, reason: string): void {
@@ -287,6 +295,19 @@ export class Session {
       const count = this.server.distribute(this.server.group(meeting), groupPacket);
       this.log.info(`GROUP_SEND meeting=${meeting} sender=${username} delivered=${count}`);
       this.reply(packet, { status: "distributed", group_deliveries: count });
+    } else if (kind === "video_frame") {
+      const { seq, data } = body;
+      if (!Number.isSafeInteger(seq) || seq < 1 || !isFrame(data)) {
+        this.error(packet, `Invalid frame (seq >= 1; JPEG or SVG data URL of at most ${MAX_FRAME_CHARS} chars)`);
+        return;
+      }
+      // Every other member gets the frame before the presenter's reply, so awaiting the reply orders the frames.
+      const frame = message("video_frame", { sender: username, meeting, quiet: true, body: { seq, data } });
+      const count = this.server.distribute(this.server.group(meeting).filter((session) => session !== this), frame);
+      if (seq === 1 || seq % FRAME_LOG_EVERY === 0) {
+        this.log.info(`VIDEO_FRAME meeting=${meeting} presenter=${username} seq=${seq} delivered=${count}`);
+      }
+      this.reply(packet, { status: "shared", deliveries: count }, true);
     } else {
       this.error(packet, "Unknown message type");
     }

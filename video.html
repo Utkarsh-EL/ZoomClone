@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting stage</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --wall: #e6ebee;
+    --panel: #f7f9fa;
+    --ink: #1f2a33;
+    --muted: #5e6b75;
+    --line: #c8d1d7;
+    --frame: #22303b;
+    --tally: #d7263d;
+    --cue: #e8a317;
+    --signage: "Bahnschrift", "DIN Alternate", "Barlow Condensed", "Arial Narrow", sans-serif;
+    --body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--wall); color: var(--ink); font: 15px/1.5 var(--body); }
+  .shell { max-width: 1180px; margin: 0 auto; padding: 20px 16px 32px; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .who { font-family: var(--signage); font-size: 34px; font-weight: 600; letter-spacing: -0.01em; line-height: 1; }
+  .who small { font-size: 17px; font-weight: 400; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
+  form.join { display: flex; gap: 8px; }
+  input { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); width: 13em; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+
+  .stage { background: var(--frame); border-radius: 10px; padding: 10px; }
+  .tally { height: 8px; border-radius: 4px; background: #3a4a57; margin-bottom: 10px; transition: background-color 200ms; }
+  .tally[data-state="presenting"] { background: var(--tally); }
+  .tally[data-state="waiting"] { background: var(--cue); animation: cue 1.2s ease-in-out infinite; }
+  @keyframes cue { 50% { opacity: 0.45; } }
+  @media (prefers-reduced-motion: reduce) { .tally[data-state="waiting"] { animation: none; } }
+
+  .screen { position: relative; aspect-ratio: 16 / 9; background: #10181f; border-radius: 4px; overflow: hidden; }
+  .screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .screen img[hidden] { display: none; }
+  .empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; color: #9fb0bc; }
+  .empty[hidden] { display: none; }
+  .empty strong { font-family: var(--signage); font-size: 24px; font-weight: 500; color: #dde6ec; display: block; margin-bottom: 4px; }
+  .lower-third { position: absolute; left: 0; bottom: 18px; display: flex; align-items: stretch; font-family: var(--signage); }
+  .lower-third[hidden] { display: none; }
+  .lower-third .name { background: var(--tally); color: #fff; font-size: 22px; font-weight: 600; padding: 4px 14px 3px 16px; }
+  .lower-third .frame { background: rgba(16, 24, 31, 0.86); color: #dde6ec; font-size: 16px; padding: 7px 12px 4px; font-variant-numeric: tabular-nums; }
+  .lower-third[data-self="true"] .name::after { content: " (you)"; font-weight: 400; }
+
+  .caption { color: #b8c6cf; font-size: 13px; margin: 8px 2px 0; min-height: 1.5em; }
+
+  aside { display: grid; gap: 14px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  h2 { font-family: var(--signage); font-size: 19px; font-weight: 600; margin: 0 0 6px; }
+  .floor-line { margin: 0 0 12px; }
+  .buttons { display: grid; gap: 8px; }
+  button { font: inherit; font-weight: 600; padding: 9px 12px; border-radius: 6px; border: 1px solid var(--frame); background: var(--frame); color: #fff; cursor: pointer; text-align: left; }
+  button.quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+  button.stop { background: var(--tally); border-color: var(--tally); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--cue); outline-offset: 2px; }
+
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: var(--signage); font-size: 16px; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .error { color: var(--tally); font-size: 14px; margin: 10px 0 0; min-height: 1.4em; }
+  video#capture, canvas#grab { display: none; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="who" id="who">Peer<small id="where">not in a meeting</small></div>
+    <form class="join" id="join-form">
+      <label for="meeting" class="note" style="margin:0;align-self:center">Meeting</label>
+      <input id="meeting" name="meeting" value="demo-room" autocomplete="off" spellcheck="false">
+      <button type="submit" class="quiet">Join</button>
+    </form>
+  </header>
+
+  <div class="layout">
+    <main class="stage">
+      <div class="tally" id="tally" data-state="off" aria-hidden="true"></div>
+      <div class="screen">
+        <div class="empty" id="empty">
+          <strong>Nobody is presenting</strong>
+          <span id="empty-hint">Join a meeting to watch, or share to take the presenter slot.</span>
+        </div>
+        <div class="lower-third" id="lower-third" hidden>
+          <span class="name" id="presenter-name"></span><span class="frame" id="frame-number"></span>
+        </div>
+      </div>
+      <p class="caption" id="caption" aria-live="polite"></p>
+    </main>
+
+    <aside>
+      <section aria-labelledby="floor-title">
+        <h2 id="floor-title">Presenter slot</h2>
+        <p class="floor-line" id="floor-line" aria-live="polite">Only one person can present at a time. The leader grants the slot in the order people asked.</p>
+        <div class="buttons">
+          <button id="share-camera" disabled>Share camera</button>
+          <button id="share-screen" disabled>Share screen</button>
+          <button id="share-pattern" class="quiet" disabled>Share test pattern</button>
+          <button id="stop" class="stop" hidden>Stop sharing</button>
+        </div>
+        <p class="error" id="error" role="alert"></p>
+      </section>
+
+      <section aria-labelledby="coord-title">
+        <h2 id="coord-title">Coordination</h2>
+        <dl>
+          <dt>Leader</dt><dd id="leader">none yet</dd>
+          <dt>Term</dt><dd id="term">0</dd>
+          <dt>Lamport clock</dt><dd id="lamport">0</dd>
+          <dt>Frames received</dt><dd id="received">0</dd>
+          <dt>Frames sent</dt><dd id="sent">0</dd>
+        </dl>
+        <p class="note" id="slot-view"></p>
+      </section>
+    </aside>
+  </div>
+</div>
+<video id="capture" muted playsinline></video>
+<canvas id="grab" width="480" height="270"></canvas>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const FPS = 8;
+  const MAX_FRAME = 58000;
+  let status = {};
+  let lastFrameAt = 0;
+  let lastPresenter = null;
+  let stream = null;
+  let pumping = false;
+
+  async function post(path, body) {
+    const response = await fetch(path, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body ?? {}) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    return data;
+  }
+
+  function showError(text) { $("error").textContent = text || ""; }
+
+  function render() {
+    const s = status;
+    $("who").firstChild.textContent = s.peer || "Peer";
+    $("where").textContent = s.meeting ? `in ${s.meeting}` : "not in a meeting";
+    $("leader").textContent = s.leader || "none yet";
+    $("term").textContent = s.term ?? 0;
+    $("lamport").textContent = s.lamport ?? 0;
+    $("received").textContent = s.received ?? 0;
+    $("sent").textContent = s.sent ?? 0;
+    $("tally").dataset.state = s.state || "off";
+
+    const joined = Boolean(s.meeting);
+    const idle = s.state === "off";
+    for (const id of ["share-camera", "share-screen", "share-pattern"]) {
+      $(id).disabled = !joined || !idle;
+      $(id).hidden = !idle;
+    }
+    $("stop").hidden = idle;
+    $("stop").textContent = s.state === "waiting" ? "Leave the queue" : "Stop sharing";
+
+    const live = Date.now() - lastFrameAt < 2000 ? lastPresenter : null;
+    if (s.state === "presenting") {
+      $("floor-line").textContent = "You are presenting. Everyone in the meeting sees your video.";
+    } else if (s.state === "waiting") {
+      $("floor-line").textContent = live
+        ? `Waiting for the slot. The leader grants it to you when ${live} stops.`
+        : "Waiting for the leader to grant you the slot.";
+    } else if (live) {
+      $("floor-line").textContent = `${live} is presenting. Share to join the queue for the slot.`;
+    } else {
+      $("floor-line").textContent = "Only one person can present at a time. The leader grants the slot in the order people asked.";
+    }
+    $("empty-hint").textContent = joined
+      ? "Share your camera, your screen or the test pattern to take the presenter slot."
+      : "Join a meeting to watch, or share to take the presenter slot.";
+
+    const slot = s.slot;
+    $("slot-view").textContent = slot && s.leader === s.peer
+      ? `As leader, this peer gives the slot out. Holder: ${slot.holder || "nobody"}. Queue: ${slot.queue.length ? slot.queue.join(", ") : "empty"}.`
+      : "";
+
+    if (!live) {
+      if ($("picture")) $("picture").hidden = true;
+      if (lastFrameAt) $("caption").textContent = "";
+      $("lower-third").hidden = true;
+      $("empty").hidden = false;
+    }
+    if (idle && stream) stopCapture();
+    if (s.state === "presenting" && s.source === "browser" && stream && !pumping) pump();
+  }
+
+  // The picture element is made on the first frame, so the page never shows an empty image.
+  function picture() {
+    let image = $("picture");
+    if (!image) {
+      image = document.createElement("img");
+      image.id = "picture";
+      image.alt = "Shared video";
+      document.querySelector(".screen").prepend(image);
+    }
+    return image;
+  }
+
+  function showFrame(frame) {
+    lastFrameAt = Date.now();
+    lastPresenter = frame.self ? status.peer : frame.presenter;
+    picture().src = frame.data;
+    picture().hidden = false;
+    $("empty").hidden = true;
+    $("lower-third").hidden = false;
+    $("lower-third").dataset.self = frame.self ? "true" : "false";
+    $("presenter-name").textContent = lastPresenter;
+    $("frame-number").textContent = `frame ${frame.seq}`;
+    $("caption").textContent = frame.self ? "Your video, as the meeting sees it." : `Watching ${frame.presenter}.`;
+  }
+
+  function grab() {
+    const canvas = $("grab");
+    const video = $("capture");
+    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight) || 1;
+    const w = video.videoWidth * scale, h = video.videoHeight * scale;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#10181f";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    for (const quality of [0.6, 0.45, 0.3, 0.2]) {
+      const data = canvas.toDataURL("image/jpeg", quality);
+      if (data.length <= MAX_FRAME) return data;
+    }
+    return null;
+  }
+
+  // One frame in flight at a time; a slow link lowers the frame rate instead of building a backlog.
+  async function pump() {
+    pumping = true;
+    try {
+      while (stream && status.state === "presenting") {
+        const started = performance.now();
+        const data = grab();
+        if (data) {
+          try {
+            await post("/frame", data);
+          } catch (error) {
+            if (status.state !== "presenting") break;
+            showError(error.message);
+          }
+        }
+        await new Promise((done) => setTimeout(done, Math.max(0, 1000 / FPS - (performance.now() - started))));
+      }
+    } finally {
+      pumping = false;
+    }
+  }
+
+  function stopCapture() {
+    if (stream) for (const track of stream.getTracks()) track.stop();
+    stream = null;
+  }
+
+  async function shareBrowser(kind) {
+    showError("");
+    try {
+      stream = kind === "camera"
+        ? await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 }, audio: false })
+        : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    } catch (error) {
+      stream = null;
+      showError(kind === "camera"
+        ? "Camera access was blocked. Allow it in the browser's site settings, then try again."
+        : "Screen sharing was cancelled.");
+      return;
+    }
+    stream.getVideoTracks()[0].addEventListener("ended", () => post("/stop").catch(() => {}));
+    $("capture").srcObject = stream;
+    await $("capture").play();
+    try {
+      status = await post("/share", { source: kind });
+      render();
+    } catch (error) {
+      stopCapture();
+      showError(error.message);
+    }
+  }
+
+  $("join-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    showError("");
+    try {
+      status = await post("/join", { meeting: $("meeting").value.trim() });
+      render();
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  $("share-camera").addEventListener("click", () => shareBrowser("camera"));
+  $("share-screen").addEventListener("click", () => shareBrowser("screen"));
+  $("share-pattern").addEventListener("click", async () => {
+    showError("");
+    try { status = await post("/share", { source: "pattern" }); render(); } catch (error) { showError(error.message); }
+  });
+  $("stop").addEventListener("click", async () => {
+    try { status = await post("/stop"); stopCapture(); render(); } catch (error) { showError(error.message); }
+  });
+
+  const events = new EventSource("/events");
+  events.addEventListener("state", (event) => { status = JSON.parse(event.data); render(); });
+  events.addEventListener("frame", (event) => { showFrame(JSON.parse(event.data)); });
+  events.addEventListener("error", () => { $("caption").textContent = "Lost contact with this peer. Is it still running?"; });
+  events.addEventListener("open", () => { $("caption").textContent = ""; });
+</script>
+</body>
+</html>

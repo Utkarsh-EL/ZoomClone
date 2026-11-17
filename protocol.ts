@@ -181,6 +181,9 @@ function describe(packet: Packet): string {
 /** Write one complete framed packet. */
 export function send(socket: Socket, packet: Packet, logger?: Logger, trace = false): void {
   const raw = marshal(packet);
+  if (packet.quiet) {
+    logger = undefined;  // Quiet packets (maintenance traffic, video frames) are not logged one by one.
+  }
   if (trace && logger) {
     logger.info(`MARSHAL object=${JSON.stringify(packet)} -> wire_bytes=${JSON.stringify(raw.toString("utf8"))}`);
   }
@@ -198,6 +201,9 @@ export async function receive(reader: FrameReader, logger?: Logger, trace = fals
     return null;
   }
   const packet = unmarshal(raw);
+  if (packet.quiet) {
+    logger = undefined;
+  }
   if (trace && logger) {
     logger.info(`UNMARSHAL wire_bytes=${JSON.stringify(raw.toString("utf8"))} -> object=${JSON.stringify(packet)}`);
   }

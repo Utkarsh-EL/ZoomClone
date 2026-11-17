@@ -264,7 +264,7 @@ interface CallOptions {
   quiet?: boolean;
 }
 
-type Handler = (body: Body) => Body | Promise<Body>;
+export type Handler = (body: Body) => Body | Promise<Body>;
 
 export class Peer {
   log: Logger;
@@ -332,6 +332,11 @@ export class Peer {
       ["lock_held", (body) => ({ held: this.lockState(checkName(body.resource)) === "held" })],
       ["append", (body) => this.onAppend(body)],
     ]);
+  }
+
+  /** Add a request type, as the video layer does for its own requests. */
+  on(kind: string, handler: Handler): void {
+    this.handlers.set(kind, handler);
   }
 
   /** Resolves once this peer has stopped serving. */
@@ -1429,6 +1434,7 @@ async function main(): Promise<void> {
       "record-ttl": { type: "string", default: String(RECORD_TTL) },
       "log-dir": { type: "string", default: "logs" },
       minutes: { type: "string" },  // Shared minutes file; peers that should coordinate name the same file.
+      http: { type: "string" },     // Port for the meeting page on 127.0.0.1: watch and share video.
       verbose: { type: "boolean", default: false },  // Also log periodic maintenance traffic.
     },
   });
@@ -1438,6 +1444,7 @@ async function main(): Promise<void> {
   if (!(recordTtl > 0)) {
     usageError(`argument --record-ttl: invalid positive number: '${values["record-ttl"]}'`);
   }
+  const http = values.http === undefined ? null : intOption("http", values.http);
   let bootstrap: Address | null = null;
   try {
     bootstrap = values.bootstrap ? parseAddress(values.bootstrap) : null;
@@ -1453,6 +1460,16 @@ async function main(): Promise<void> {
     console.error(`Could not start ${name}: ${errorText(error)}`);
     process.exit(1);
   }
+  // Loaded here rather than at the top: video.ts reaches back to peer.ts through client.ts.
+  const { attachVideo, startWebUi } = await import("./video.ts");
+  const video = attachVideo(peer);
+  if (http !== null) {
+    try {
+      await startWebUi(video, http);
+    } catch (error) {
+      console.error(`Could not serve the meeting page on port ${http}: ${errorText(error)}`);
+    }
+  }
   process.on("SIGINT", () => void peer.leave());
   void readCommands(peer);
   await peer.whenStopped;
@@ -1460,5 +1477,10 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await main();
+  // Not awaited: main() imports video.ts, which reaches back to this module through client.ts, and that import
+  // cannot finish while this module's evaluation is still waiting on main().
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

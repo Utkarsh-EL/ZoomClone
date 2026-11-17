@@ -41,6 +41,7 @@ export class Participant {
   pending = new Map<string, (packet: Packet) => void>();
   inbox: Packet[] = [];
   closed = false;
+  onFrame: ((packet: Packet) => void) | null = null;  // Video frames go here instead of the inbox when set.
   private arrival: (() => void) | null = null;
 
   constructor(name: string, options: ParticipantOptions = {}) {
@@ -90,6 +91,10 @@ export class Participant {
             continue;
           }
         }
+        if (packet.type === "video_frame" && this.onFrame) {
+          this.onFrame(packet);
+          continue;
+        }
         this.inbox.push(packet);
         const arrival = this.arrival;
         this.arrival = null;
@@ -109,11 +114,11 @@ export class Participant {
     }
   }
 
-  async call(kind: string, body: Body = {}): Promise<Body> {
+  async call(kind: string, body: Body = {}, quiet = false): Promise<Body> {
     if (this.closed || this.socket === null) {
       throw new NetworkError("Participant is not connected");
     }
-    const packet = message(kind, { body });
+    const packet = message(kind, { quiet, body });
     const reply = new Promise<Packet>((resolve) => this.pending.set(packet.id, resolve));
     try {
       send(this.socket, packet, this.log, this.trace);
@@ -137,6 +142,11 @@ export class Participant {
 
   publish(topic: string, content: string): Promise<Body> {
     return this.call("publish", { topic, content });
+  }
+
+  /** Send one video frame; the reply comes after the coordinator has relayed it to every other member. */
+  shareFrame(seq: number, data: string): Promise<Body> {
+    return this.call("video_frame", { seq, data }, true);
   }
 
   groupSend(content: string): Promise<Body> {
