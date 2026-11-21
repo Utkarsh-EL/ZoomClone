@@ -9,7 +9,16 @@ Requirements: Node.js 24.16 or newer and npm.
 ```sh
 git clone https://github.com/Utkarsh-EL/ZoomClone.git
 cd ZoomClone
+```
+
+For Linux systems
+```
 npm install
+```
+
+For windows systems
+```
+winget install OpenJS.NodeJS.LTS
 ```
 
 `npm install` is only needed for type checking. The demos and services use Node's built-in TypeScript support and can run without installing dependencies.
