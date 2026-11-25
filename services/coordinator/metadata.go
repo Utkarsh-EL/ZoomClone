@@ -67,14 +67,27 @@ type savedOutcome struct {
 }
 
 type State struct {
-	Version   int                     `json:"version"`
-	Cluster   string                  `json:"cluster"`
-	HighWater uint64                  `json:"highWater"`
-	Meetings  map[string]Meeting      `json:"meetings"`
-	Codes     map[string]string       `json:"codes"`
-	Runtimes  map[string]Runtime      `json:"runtimes"`
-	Attempts  map[string]bool         `json:"attempts"`
-	Outcomes  map[string]savedOutcome `json:"outcomes"`
+	ConfigurationIndex uint64                  `json:"configurationIndex"`
+	Configuration      raft.Configuration      `json:"configuration"`
+	Version            int                     `json:"version"`
+	Cluster            string                  `json:"cluster"`
+	HighWater          uint64                  `json:"highWater"`
+	Meetings           map[string]Meeting      `json:"meetings"`
+	Codes              map[string]string       `json:"codes"`
+	Runtimes           map[string]Runtime      `json:"runtimes"`
+	Attempts           map[string]bool         `json:"attempts"`
+	Outcomes           map[string]savedOutcome `json:"outcomes"`
+}
+
+// GetConfiguration().Index() is zero in the pinned upstream release. Keep the
+// committed index via the library's supported callback, including in snapshots.
+// Passing a committed index to prevIndex is safe: a newer pending configuration
+// makes Raft reject the change rather than weakening its version guard to zero.
+func (m *metadata) StoreConfiguration(index uint64, configuration raft.Configuration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.s.ConfigurationIndex = index
+	m.s.Configuration = configuration.Clone()
 }
 
 type metadata struct {
