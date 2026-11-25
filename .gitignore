@@ -1,4 +1,7 @@
 node_modules/
+.cache/
+.superpowers/
+.local/
 dist/
 build/
 coverage/
