@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test:storage": "node scripts/storage-check.ts",
-    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts tests/video.test.ts tests/coordinator.test.ts",
+    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts tests/video.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
     "test:coordinator": "node scripts/coordinator-build.ts --check",
     "demo:coordinator": "node scripts/coordinator-scenario.ts",
