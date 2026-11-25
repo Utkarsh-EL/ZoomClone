@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; first coordinator foundation checkpoint implemented on `milestone-5`. See [implementation progress and limits](../../coordinator-foundation.md). The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator and [PostgreSQL storage foundations](../../postgresql-fencing.md) implemented on `milestone-5`. Live ownership integration is gated by [reproduced consensus safety failures](../../coordinator-foundation.md#dependency-findings-and-next-evidence). The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 

@@ -1,7 +1,7 @@
 # Distributed meeting redesign handoff
 
 Date: 2026-11-25
-Status: handoff reviewed; first coordinator foundation checkpoint implemented and tested on `milestone-5` from `milestone-4`. The full redesign remains in progress.
+Status: coordinator and PostgreSQL storage foundations implemented on `milestone-5` from `milestone-4`. Reproduced Raft safety failures block live ownership integration. The full redesign remains in progress.
 
 ## Implementation update
 
@@ -16,6 +16,10 @@ Important review finding: pinned Raft `GetConfiguration().Index()` returns zero.
 Docker is installed but its daemon was unavailable during this checkpoint. PostgreSQL fencing, recovery reconciliation, Chord integration, ClientSession persistence/replay, SFU feasibility, complete proxy routing, supervisor, and dashboard remain future batches. The next evidence should cover dependency log/snapshot safety and PostgreSQL ownership races; follow with headless activation recovery. Do not mistake the new helper for a migrated meeting application.
 
 The user then enabled Docker and authorized continued implementation. Docker is reachable; an isolated PostgreSQL 18.7 Compose lab and fencing checkpoint are underway ([plan](../plans/2026-11-25-postgresql-fencing.md)). The parallel dependency audit **reproduced three Raft v1.8.0 safety failures**; see the coordinator guide for the opt-in failing regressions and upstream links. Live Raft-to-SQL ownership activation remains disabled. Do not equate the ordinary test suite (which explicitly skips the known-failing audit) with dependency safety.
+
+The PostgreSQL checkpoint is now implemented and independently reviewed: see [guide and evidence](../../postgresql-fencing.md). It covers versioned migrations/cluster identity, fenced command/activation/closure paths, stable outcomes, contiguous events, FIFO screen-share handoff plus transactional media intentions, participant snapshot reads and restricted inspection. Real Docker tests pause a lock-holding client, restart PostgreSQL with its volume, and verify failed-startup cleanup affects only its owned lab. Review regressions also cover participant turnover and immutable in-flight command/owner inputs. This is an in-process storage boundary with explicit test assignments, not a deployed meeting service or active recovery controller.
+
+Next priority: replace or safely update the consensus dependency and make the three safety regressions plus live partition tests pass before connecting external ownership. Then implement activation intent/readiness metadata, headless reconciliation and failure suspicion. Docker no longer blocks independent feasibility work.
 
 ## Read first
 

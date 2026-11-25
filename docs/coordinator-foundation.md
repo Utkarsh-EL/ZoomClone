@@ -2,6 +2,8 @@
 
 This is the first implemented checkpoint of the [distributed meeting redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md), on `milestone-5`. The milestone-4 application and its demos still run separately. The new helper is not yet wired into `peer.ts` and does not authorize meeting access.
 
+**Safety gate:** a subsequent audit reproduced three upstream Raft log/snapshot failures. The helper remains a learning/feasibility component and must not authorize external ownership until those failures are resolved. See the audit commands below. The independent [PostgreSQL fencing checkpoint](postgresql-fencing.md) uses explicit test assignments.
+
 ## Run the evidence
 
 Install Node.js 24.16+ and Go 1.26+. Docker is not required for this checkpoint. The first Go build needs network access to download the exact versions in `services/coordinator/go.mod` and their checksum-verified dependencies.
@@ -104,7 +106,7 @@ Remove-Item Env:\ZOOM_RAFT_SAFETY_AUDIT
 
 All three currently fail their safety assertions (exit 1). The ordinary suite explicitly skips these opt-in reproductions; that green suite does not establish consensus safety. Proposed upstream fixes [#734](https://github.com/hashicorp/raft/pull/734) and [#735](https://github.com/hashicorp/raft/pull/735) were still unmerged at audit time. No safe upgrade has been selected. Do not activate external database/media ownership using this dependency until a reviewed replacement or fixed version passes these and live partition/recovery tests. Independent PostgreSQL fencing tests use explicit test assignments only.
 
-The next implementation plan should prove PostgreSQL fence/command races, stalled transaction timeouts, and resumable Raft-to-SQL activation before connecting participant or media controls. Docker Desktop must be running for that work. Preserve the SQL cutover rule and the separate media cutover; a successful assignment in this demo does not implement either one.
+PostgreSQL fence/command races and stalled transaction timeout evidence are now implemented in the [storage checkpoint](postgresql-fencing.md). Resolve consensus safety, then prove resumable Raft-to-SQL activation before connecting participant or media controls. Preserve the SQL cutover rule and the separate media cutover; a successful assignment in this demo does not implement either one.
 
 ## Review and verification record
 
