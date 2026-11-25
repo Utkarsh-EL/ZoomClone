@@ -1,6 +1,6 @@
 # Consensus repair checkpoint
 
-The three reproduced Raft log/snapshot failures are repaired on `milestone-5`; their tests now run unconditionally. This checkpoint also adds a live TCP partition and real-process snapshot-publication crashes. It supports continuing to the Raft-to-SQL activation protocol; that protocol and the migrated meeting application remain unimplemented.
+The three reproduced Raft log/snapshot failures are repaired on `milestone-5`; their tests now run unconditionally. This checkpoint also adds a live TCP partition and real-process snapshot-publication crashes. The later [ownership activation checkpoint](ownership-activation.md) connects Raft to SQL through a headless controller; the migrated meeting application remains in progress.
 
 ## Run the checks
 
@@ -44,7 +44,7 @@ The [recorded result](../evidence/consensus_run/result.json) reports the final c
 
 ## Compatibility and next work
 
-New helper directories use storage version 2. Old directories may already contain incorrectly applied outcomes; startup rejects them and preserves them for inspection. Create a fresh isolated lab instead of editing identity markers. Envelope version 2 rejects mixed legacy helpers/clients. HTTP operation paths, the metadata schema and native Raft snapshot versions have separate versioning.
+New helper directories use storage version 3 after the ownership activation checkpoint. Old directories may already contain incorrectly applied outcomes; startup rejects them and preserves them for inspection. Create a fresh isolated lab instead of editing identity markers. Envelope version 2 rejects mixed legacy helpers/clients. HTTP operation paths, the metadata schema and native Raft snapshot versions have separate versioning.
 
 Optional append pipelining and heartbeat fast-path dispatch are omitted. All consensus messages reach the serialized authenticated consumer. `--routes` maps logical loopback destinations to loopback proxy endpoints separately for each source; peer-control requests use it too. This is coordinator routing evidence, not complete whole-system fault routing or LAN/TLS acceptance.
 

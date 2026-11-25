@@ -1,8 +1,8 @@
 # PostgreSQL fencing checkpoint
 
-Docker is working. This `milestone-5` batch implements and tests the storage boundary in the [current redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md). It is independent of the existing participant application and uses explicit test ownership assignments. There is no live Raft-to-SQL recovery controller yet.
+Docker is working. This `milestone-5` batch implements and tests the storage boundary in the [current redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md). Its separate tests use explicit ownership assignments. The later [ownership activation checkpoint](ownership-activation.md) integrates this boundary with a headless Raft-to-SQL controller; the original participant application remains separate.
 
-The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced dependency failures and adds live partition and durable snapshot crash tests. The remaining integration gate is the resumable Raft-to-SQL activation protocol and its failure evidence; a committed candidate alone still grants no SQL authority.
+The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced dependency failures and adds live partition and durable snapshot crash tests. The ownership checkpoint adds resumable activation and failure evidence; a committed candidate alone still grants no SQL authority.
 
 ## Run and inspect
 
@@ -79,4 +79,4 @@ The restart test restarts PostgreSQL's container using its original named volume
 
 Independent review found the lifetime-capacity bug, fixed with a failing turnover/rejoin regression. Failed-startup cleanup was also reproduced against a real owned Docker project and fixed. A separate SQL regression reproduced mutation of an in-flight owner redirecting work to another meeting; inputs are now captured before awaiting the fence. The database restart test found and verified the active-client error-handler fix.
 
-Next: extend coordinator metadata with resumable activation intent/readiness and implement the headless recovery worker against this storage boundary. Prove crashes/retries at each cross-system transition before connecting participant or media controls. After that, connect the 128-bit Chord lookup, persistent participant session/replay, supervisor, media adapter and dashboard. Retain the current separation between desired assignment, SQL ownership cutover and serialized media cutover.
+The later ownership checkpoint implements resumable activation intent/readiness and headless recovery against this storage boundary, with crash/retry checks at cross-system transitions. Next: authenticated remote runtime adapters, 128-bit Chord lookup, persistent participant session/replay, supervisor, media adapter and dashboard. Retain the separation between desired assignment, SQL ownership cutover and serialized media cutover.

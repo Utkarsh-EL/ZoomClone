@@ -33,7 +33,7 @@ export async function until<T>(description: string, observe: () => Promise<T | u
 
 /** A bounded evidence runner, not the persistent supervisor in the redesign. */
 export class CoordinatorLab {
-  readonly clusterId = randomUUID();
+  readonly clusterId: string;
   readonly token = randomBytes(32).toString("hex");
   readonly nodes: ManagedHelper[] = [];
   readonly root: string;
@@ -41,11 +41,11 @@ export class CoordinatorLab {
   private stopping?: Promise<void>;
   private readonly onSignal = () => { void this.stop().finally(() => process.exit(130)); };
 
-  private constructor(root: string) { this.root = root; }
+  private constructor(root: string, clusterId: string) { this.root = root; this.clusterId = clusterId; }
 
-  static async create(count = 5): Promise<CoordinatorLab> {
+  static async create(count = 5, clusterId: string = randomUUID()): Promise<CoordinatorLab> {
     if (!Number.isInteger(count) || count < 1 || count > 9) throw new Error("Evidence lab requires 1–9 helpers");
-    const lab = new CoordinatorLab(join(projectRoot, ".local", "coordinator-labs", randomUUID()));
+    const lab = new CoordinatorLab(join(projectRoot, ".local", "coordinator-labs", randomUUID()), clusterId);
     await mkdir(lab.root, { recursive: true });
     const reservations: ReturnType<typeof createServer>[] = [];
     process.once("SIGINT", lab.onSignal);

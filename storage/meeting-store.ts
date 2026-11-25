@@ -251,6 +251,18 @@ export class MeetingStore {
     });
   }
 
+  /** Candidate preparation uses one bounded consistent view. Durable outcomes,
+   * events and media intentions stay in SQL and are read on demand after cutover. */
+  async prepare(owner: Owner): Promise<Observation> {
+    owner = { ...owner };
+    validOwner(owner, this.database.clusterId);
+    return this.run(this.runtime, async client => {
+      const fence = await this.fence(client, owner.meetingId);
+      if (!same(fence, owner) || !["RECOVERING", "ACTIVE"].includes(fence.phase)) throw new StoreError("FENCED");
+      return this.observation(client, fence);
+    }, true);
+  }
+
   async execute(
     authority: Authority,
     command: MeetingCommand,

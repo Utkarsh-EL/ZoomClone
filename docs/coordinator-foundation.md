@@ -2,7 +2,7 @@
 
 This is the first implemented checkpoint of the [distributed meeting redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md), on `milestone-5`. The milestone-4 application and its demos still run separately. The new helper is not yet wired into `peer.ts` and does not authorize meeting access.
 
-The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced upstream log/snapshot failures with a reviewed local dependency patch and always-enabled regressions. The helper still does not authorize external ownership: resumable Raft-to-SQL activation remains unimplemented. The independent [PostgreSQL fencing checkpoint](postgresql-fencing.md) uses explicit test assignments.
+The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced upstream log/snapshot failures with a reviewed local dependency patch and always-enabled regressions. The later [ownership activation checkpoint](ownership-activation.md) connects committed assignments to the [PostgreSQL fence](postgresql-fencing.md) through a headless controller. Original demos remain separate; remote runtime deployment is still in progress.
 
 ## Run the evidence
 
@@ -36,7 +36,7 @@ Every run preserves its own directory under `.local/coordinator-labs/<uuid>/`: `
 
 ## What is replicated
 
-The deterministic FSM owns three operations:
+The foundation introduced these deterministic FSM operations; the later ownership checkpoint adds activation intent, readiness and revision-guarded renewal:
 
 | Command | Preconditions and result |
 | --- | --- |
@@ -69,7 +69,7 @@ $env:ZOOM_CLUSTER_TOKEN = [Convert]::ToHexString([System.Security.Cryptography.R
 
 For a multi-voter bootstrap, use exactly the same complete list of initial voter IDs/addresses at every node, each with its own matching ID, port, and new directory. Bootstrap is explicit initialization, never a response to unreachability. A new directory must not already exist. A joining node starts with `--new` and no bootstrap file; it cannot create its own cluster.
 
-On normal restart, supply the same cluster UUID, node UUID, address, directory, and environment credential; omit **both** `--new` and `--bootstrap`. Missing storage or mismatched identity/address fails startup. Storage version 2 rejects directories created by the pre-fix helper; preserve those directories and create a fresh isolated lab rather than editing their version marker. A store UUID binds `identity.json` to a sentinel in the Bolt store; an empty valid replacement database cannot masquerade as the original store, including for a node originally admitted as a nonvoter. The persisted voting term is also required. A retained snapshot does not excuse lost voting state. Keep the entire node directory, including `identity.json`, `raft.db`, and `snapshots/`.
+On normal restart, supply the same cluster UUID, node UUID, address, directory, and environment credential; omit **both** `--new` and `--bootstrap`. Missing storage or mismatched identity/address fails startup. Storage version 3 rejects directories created by earlier helpers; preserve those directories and create a fresh isolated lab rather than editing their version marker. A store UUID binds `identity.json` to a sentinel in the Bolt store; an empty valid replacement database cannot masquerade as the original store, including for a node originally admitted as a nonvoter. The persisted voting term is also required. A retained snapshot does not excuse lost voting state. Keep the entire node directory, including `identity.json`, `raft.db`, and `snapshots/`.
 
 Never run two processes with the same voter identity, or use `--new` to reconstruct a lost voter's state under that identity. Directory and port checks prevent ordinary accidental reuse locally, but do not enforce uniqueness across copied directories/machines. Replacement after state loss requires quorum: remove the old voter through an agreed configuration change, initialize a new UUID/directory, add it as a nonvoter, synchronize, then promote. A minority cannot perform this recovery and must wait for enough existing voters.
 

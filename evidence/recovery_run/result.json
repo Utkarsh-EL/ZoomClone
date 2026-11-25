@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "checkpoint": "headless ownership activation",
+  "coordinatorStorageVersion": 3,
+  "verification": [
+    {
+      "command": "npm test",
+      "passed": 62,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:recovery",
+      "storageTestsPassed": 7,
+      "storageFaultTestsPassed": 4,
+      "recoveryTestsPassed": 2,
+      "failed": 0
+    },
+    {
+      "command": "node scripts/coordinator-build.ts --check",
+      "result": "dependency safety regressions, helper suite, vet, build and five-helper process scenario passed"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "passed"
+    }
+  ],
+  "crashStages": [
+    "ASSIGNED",
+    "CREATED",
+    "FENCED",
+    "INTENT",
+    "ACTIVE",
+    "READY"
+  ],
+  "coverage": [
+    "SIGKILL of recovery driver after every durable stage; fresh process resumes",
+    "Lost replies after assignment, SQL creation, SQL fence, activation intent, SQL activation and readiness confirmation",
+    "Retained participant membership and original command outcome through takeover",
+    "Late old SQL activation rejected; old runtime readiness revoked",
+    "Renewal revision defeats stale suspicion; failed preparation eventually selects replacement",
+    "Readiness expires; stop invalidates a late in-flight renewal",
+    "Leader crash and fresh grace; headless controller loop",
+    "Missing durable state and quorum loss fail closed",
+    "Lost renewal reply clears readiness; subsequent refresh resolves committed revision",
+    "Authority read fits envelope with 5000 retained outcomes"
+  ],
+  "review": {
+    "kind": "independent read-only code review",
+    "importantFixed": [
+      "candidate errors reset suspicion indefinitely",
+      "retained renewal history exceeds authority reply size"
+    ],
+    "otherRegressionFixed": "stop during renewal re-enables runtime from late response",
+    "deferredMinor": "renewal safe-integer maximum differs from snapshot restore bound by one"
+  },
+  "limits": [
+    "Trusted in-process runtime adapters; remote deployment and authentication not integrated",
+    "No migrated participant application, ClientSession replay, discovery or media integration",
+    "Retained outcomes still grow toward existing 32 MiB snapshot ceiling",
+    "Process failure evidence on one host; not host failure or general safety proof"
+  ]
+}

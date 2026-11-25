@@ -20,6 +20,7 @@ try {
   for (const file of [
     "tests/storage.test.ts",
     "tests/storage-faults.test.ts",
+    ...(process.argv.includes("--recovery") ? ["tests/recovery.test.ts"] : []),
   ]) {
     const child = spawn(process.execPath, ["--test", file], {
       cwd: projectRoot,

@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md) and [PostgreSQL storage foundations](../../postgresql-fencing.md) implemented on `milestone-5`. Resumable Raft-to-SQL ownership activation remains the next integration gate. The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md) and [headless ownership activation](../../ownership-activation.md) implemented on `milestone-5`. Remote runtime networking and participant migration remain integration work. The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 

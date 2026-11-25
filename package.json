@@ -6,6 +6,7 @@
     "node": ">=24.16"
   },
   "scripts": {
+    "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",
     "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts tests/video.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
