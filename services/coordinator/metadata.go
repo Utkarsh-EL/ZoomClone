@@ -91,8 +91,9 @@ func (m *metadata) StoreConfiguration(index uint64, configuration raft.Configura
 }
 
 type metadata struct {
-	mu sync.RWMutex
-	s  State
+	mu            sync.RWMutex
+	s             State
+	observeCausal func(uint64)
 }
 
 func newMetadata(cluster string) *metadata {
@@ -134,6 +135,9 @@ func (m *metadata) Apply(log *raft.Log) any {
 		return Result{Code: "INVALID", ID: c.ID, Index: log.Index}
 	}
 	stamp := c.LogicalTime
+	if m.observeCausal != nil {
+		m.observeCausal(stamp)
+	}
 	c.LogicalTime = 0 // Retransmission timestamps do not change semantic identity.
 	canonical, _ := json.Marshal(c)
 	digestBytes := sha256.Sum256(canonical)
@@ -276,6 +280,9 @@ func (m *metadata) Restore(reader io.ReadCloser) error {
 		}
 	}
 	m.mu.Lock()
+	if m.observeCausal != nil {
+		m.observeCausal(s.HighWater)
+	}
 	m.s = s
 	m.mu.Unlock()
 	return nil

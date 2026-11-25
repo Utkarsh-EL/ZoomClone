@@ -1,0 +1,43 @@
+Milestone 1: Architecture and Models
+Multiple processes
+Server and client request/responses
+Logging between components
+
+Milestone 2: Communication
+Clients and service request/response
+Use at least one of: sockets, RPC, or RMI
+Publish-subscribe (multiple subscribers)
+group communication (multiple nodes)
+Timestamped message logging
+Data serialization
+
+Milestone 3: P2P Integration
+Peer nodes (at least 4)
+Peer join and leave behavior
+Lookup mechanism (not sure what this means)
+Some overlay structure:
+    Ex: Ring, Mesh, Tree, Chord-style DHT, Unstructured Gossip Network
+Data or service discovery through peers
+
+Milestone 4: Coordination
+Logical clocks (each node)
+    Ex: Lamport, vector
+Leader election
+    Ex: Bully algoritm, Ring election algorithm
+Distributed mutual exclusion
+    Ex: Centralized mutual exclusion, Ricart-Agrawala, Token-ring mutual exclusion
+Event ordering
+Shared resource that requires coordination
+Messages carry logical timestamps
+Shared resource protected from concurrect access
+
+Milestone 5: Replication, Transactions, Fault Tolerance
+Replication of important data (at least one service or dataset)
+Consistency strategy
+    Ex: primary-backup, active replication, quorum, eventual consistency
+Transactions or multi-step operation
+    Ex: Booking, checkout, ride assignment, bid placement, resrvation, playlist update, post update
+Fault detection
+Fault recovery or failover
+    Must recover from at least 1 node crashing/becoming unavailable
+Recovery, retry, failover, or replica use after failure

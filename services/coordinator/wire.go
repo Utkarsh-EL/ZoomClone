@@ -45,14 +45,23 @@ func newUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func (w *wire) packet(kind, id string, body json.RawMessage, failure *wireError) envelope {
+func (w *wire) packet(kind, id string, body json.RawMessage, failure *wireError) (envelope, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.clock >= maxSafeInteger-1 {
+		return envelope{}, fmt.Errorf("logical clock exhausted")
+	}
 	w.clock++
 	e := envelope{Version: 1, ClusterID: w.cluster, NodeID: w.id, Incarnation: w.incarnation,
 		RequestID: id, Lamport: w.clock, Kind: kind, Body: body, Error: failure}
 	w.trace("send", e)
-	return e
+	return e, nil
+}
+
+func (w *wire) observe(stamp uint64) {
+	w.mu.Lock()
+	w.clock = max(w.clock, stamp)
+	w.mu.Unlock()
 }
 
 // accept runs for all RPCs, including heartbeat fast paths and snapshot headers.
@@ -62,6 +71,9 @@ func (w *wire) accept(e envelope, kind string) error {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if max(w.clock, e.Lamport) >= maxSafeInteger-2 {
+		return fmt.Errorf("logical clock exhausted")
+	}
 	w.clock = max(w.clock, e.Lamport) + 1
 	w.trace("receive", e)
 	return nil

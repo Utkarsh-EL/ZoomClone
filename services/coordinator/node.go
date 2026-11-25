@@ -33,6 +33,7 @@ type identity struct {
 	ID           string `json:"id"`
 	Address      string `json:"address"`
 	Bootstrapped bool   `json:"bootstrapped"`
+	StoreID      string `json:"storeId"`
 }
 
 type node struct {
@@ -72,7 +73,7 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 	if !loopbackAddress(address, false) || (cfg.Address != address && !hasZeroPort(cfg.Address)) {
 		return nil, fmt.Errorf("listener/address mismatch")
 	}
-	manifest := identity{Version: 1, Cluster: cfg.Cluster, ID: cfg.ID, Address: address, Bootstrapped: len(cfg.Bootstrap) != 0}
+	manifest := identity{Version: 1, Cluster: cfg.Cluster, ID: cfg.ID, Address: address, Bootstrapped: len(cfg.Bootstrap) != 0, StoreID: newUUID()}
 	manifestPath := filepath.Join(cfg.DataDir, "identity.json")
 	storePath := filepath.Join(cfg.DataDir, "raft.db")
 	if cfg.New {
@@ -106,7 +107,7 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 			return nil, fmt.Errorf("durable identity missing; explicit replacement required: %w", err)
 		}
 		var old identity
-		if decodeStrict(b, &old) != nil || old.Version != 1 || old.Cluster != cfg.Cluster || old.ID != cfg.ID || old.Address != address {
+		if decodeStrict(b, &old) != nil || old.Version != 1 || old.Cluster != cfg.Cluster || old.ID != cfg.ID || old.Address != address || !uuidPattern.MatchString(old.StoreID) {
 			return nil, fmt.Errorf("durable identity does not match startup configuration")
 		}
 		manifest = old
@@ -123,6 +124,9 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 			_ = store.Close()
 		}
 	}()
+	if err := bindStoreIdentity(store, manifest.StoreID, cfg.New); err != nil {
+		return nil, err
+	}
 	snapshots, err := raft.NewFileSnapshotStore(cfg.DataDir, 3, io.Discard)
 	if err != nil {
 		return nil, err
@@ -137,6 +141,18 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 	w := &wire{cluster: cfg.Cluster, id: cfg.ID, incarnation: newUUID(), token: cfg.Token, output: cfg.Output}
 	transport := newTransport(w, address)
 	meta := newMetadata(cfg.Cluster)
+	meta.observeCausal = w.observe
+	availableSnapshots, err := snapshots.List()
+	if err != nil {
+		return nil, err
+	}
+	var coveredIndex uint64
+	for _, snapshot := range availableSnapshots {
+		coveredIndex = max(coveredIndex, snapshot.Index)
+	}
+	if err := seedClockFromLogs(store, w, coveredIndex); err != nil {
+		return nil, err
+	}
 	rc := raft.DefaultConfig()
 	rc.LocalID = raft.ServerID(cfg.ID)
 	rc.Logger = hclog.NewNullLogger()

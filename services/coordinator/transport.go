@@ -69,7 +69,10 @@ func (t *httpTransport) exchange(ctx context.Context, id raft.ServerID, address 
 	if err != nil {
 		return err
 	}
-	e := t.wire.packet(kind, newUUID(), body, nil)
+	e, err := t.wire.packet(kind, newUUID(), body, nil)
+	if err != nil {
+		return err
+	}
 	header, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -162,7 +165,11 @@ func (t *httpTransport) reply(w http.ResponseWriter, request envelope, value any
 	if failure != nil {
 		problem = &wireError{Code: "UNAVAILABLE", Message: failure.Error()}
 	}
-	e := t.wire.packet(request.Kind+".reply", request.RequestID, body, problem)
+	e, err := t.wire.packet(request.Kind+".reply", request.RequestID, body, problem)
+	if err != nil {
+		http.Error(w, "logical clock exhausted", http.StatusServiceUnavailable)
+		return
+	}
 	b, err := json.Marshal(e)
 	if err != nil || len(b)+1 > maxEnvelopeBytes {
 		e.Body = json.RawMessage("null")
@@ -201,6 +208,10 @@ func (t *httpTransport) serveRaft(w http.ResponseWriter, r *http.Request, e enve
 	}
 	if err := decodeStrict(e.Body, command); err != nil {
 		http.Error(w, "invalid RPC body", http.StatusBadRequest)
+		return
+	}
+	if err := validateRPC(command, e.NodeID); err != nil {
+		http.Error(w, "invalid Raft payload", http.StatusBadRequest)
 		return
 	}
 	responses := make(chan raft.RPCResponse, 1)

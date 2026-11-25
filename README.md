@@ -79,4 +79,6 @@ Keep these scripts as repeatable, end-to-end demonstrations; they complement the
 
 - [Peer-to-peer overlay](docs/peer-to-peer-overlay.md): ring behavior, manual peer commands, protocol, tests, and limitations.
 - [Coordination and video sharing](docs/coordination.md): Lamport clocks, leader election, locks, video presentation, demos, tests, and limitations.
-- [Video meeting MVP design](docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md): design notes for a later video meeting architecture.
+- [Durable coordinator checkpoint](docs/coordinator-foundation.md): the first `milestone-5` redesign batch, with real Raft helpers, persistent metadata, crash/restart evidence, and current limits. Run `npm run test:coordinator` or `npm run demo:coordinator` with Go 1.26+ installed.
+- [Current redesign](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) and [implementation plan](docs/superpowers/plans/2026-11-25-coordinator-foundation.md): shared PostgreSQL, replaceable meeting runtimes, and real SFU media. These are not yet the application running above.
+- [Historical video MVP design](docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md): superseded architecture notes.

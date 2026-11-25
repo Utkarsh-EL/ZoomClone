@@ -1,0 +1,79 @@
+{
+  "root": ".local/coordinator-labs/9c138c8e-88e9-4419-b9c2-457f93fd5e56",
+  "initialLeader": "fed53cac-d866-455a-b6b8-cec0fbb1d498",
+  "replacementLeader": "23b31ee4-b3c9-4ef4-8e12-dcb4cb1537bf",
+  "initialIncarnation": "e77cfca0-2751-444e-b7e2-36d59d837b81",
+  "restartedIncarnation": "1d34404d-7031-49b7-a3da-ed252520ed88",
+  "stableOutcome": {
+    "code": "OK",
+    "id": "594d7955-6eb7-4efb-b0a6-7a4cec7f17f2",
+    "index": 4
+  },
+  "assignmentGeneration": 1,
+  "snapshotInstalled": true,
+  "voters": 5,
+  "quorum": 3,
+  "minorityRejected": true,
+  "retainedAfterFullRestart": true,
+  "effectiveMeetingOwnershipImplemented": false,
+  "events": [
+    {
+      "stage": "leader-ready",
+      "time": "2026-11-25T09:28:26.585Z",
+      "elapsedMs": 501,
+      "nodeId": "fed53cac-d866-455a-b6b8-cec0fbb1d498"
+    },
+    {
+      "stage": "metadata-committed",
+      "time": "2026-11-25T09:28:26.602Z",
+      "elapsedMs": 517
+    },
+    {
+      "stage": "leader-killed",
+      "time": "2026-11-25T09:28:26.607Z",
+      "elapsedMs": 521,
+      "nodeId": "fed53cac-d866-455a-b6b8-cec0fbb1d498"
+    },
+    {
+      "stage": "replacement-ready",
+      "time": "2026-11-25T09:28:27.52Z",
+      "elapsedMs": 1435,
+      "nodeId": "23b31ee4-b3c9-4ef4-8e12-dcb4cb1537bf"
+    },
+    {
+      "stage": "snapshot-forced",
+      "time": "2026-11-25T09:28:27.725Z",
+      "elapsedMs": 1640,
+      "nodeId": "23b31ee4-b3c9-4ef4-8e12-dcb4cb1537bf"
+    },
+    {
+      "stage": "old-voter-restarted-and-caught-up",
+      "time": "2026-11-25T09:28:27.855Z",
+      "elapsedMs": 1770,
+      "nodeId": "fed53cac-d866-455a-b6b8-cec0fbb1d498"
+    },
+    {
+      "stage": "three-voters-held-down",
+      "time": "2026-11-25T09:28:27.861Z",
+      "elapsedMs": 1776
+    },
+    {
+      "stage": "minority-refused-authoritative-read",
+      "time": "2026-11-25T09:28:27.865Z",
+      "elapsedMs": 1780,
+      "nodeId": "eb877a46-00de-4346-9b85-d47008d680a6"
+    },
+    {
+      "stage": "quorum-restored",
+      "time": "2026-11-25T09:28:28.396Z",
+      "elapsedMs": 2311,
+      "nodeId": "1aabb973-da64-4586-8bd0-16e882b78342"
+    },
+    {
+      "stage": "all-processes-restarted-with-retained-metadata",
+      "time": "2026-11-25T09:28:29.065Z",
+      "elapsedMs": 2980,
+      "nodeId": "1aabb973-da64-4586-8bd0-16e882b78342"
+    }
+  ]
+}
