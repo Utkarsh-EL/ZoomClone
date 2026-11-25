@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md) and [headless ownership activation](../../ownership-activation.md) implemented on `milestone-5`. Remote runtime networking and participant migration remain integration work. The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md), [headless ownership activation](../../ownership-activation.md) and [authenticated loopback runtimes with renewal scheduling](../../remote-runtimes.md) implemented on `milestone-5`. Discovery, participant migration and broader network deployment remain integration work. The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 

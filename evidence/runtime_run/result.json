@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "checkpoint": "authenticated loopback runtime adapters and renewal scheduling",
+  "coordinatorStorageVersion": 3,
+  "verification": [
+    { "command": "npm test", "passed": 75, "failed": 0 },
+    { "command": "npm run typecheck", "result": "passed" },
+    {
+      "command": "npm run test:coordinator",
+      "result": "dependency safety regressions, helper suite, vet, build and five-helper process scenario passed"
+    },
+    {
+      "command": "npm run test:runtimes",
+      "storageTestsPassed": 7,
+      "storageFaultTestsPassed": 4,
+      "recoveryTestsPassed": 2,
+      "runtimeProcessTestsPassed": 2,
+      "failed": 0
+    }
+  ],
+  "coverage": [
+    "Actual HTTP authentication, controller allowlist and expected runtime incarnation in both directions",
+    "Stamped request/reply correlation and Lamport observation",
+    "Strict owner/operation/framing checks and bounded bytes, concurrency, client deadlines, partial bodies and partial HTTP headers",
+    "Controller routes share and validate one per-incarnation Lamport clock",
+    "One registration command ID and expected revision retained across lost replies",
+    "Replaced registration stops old runtime instead of reclaiming the registry",
+    "Automatic READY reconciliation, monotonic authority renewal and stop-during-preparation refusal",
+    "Read-only helper route failover; no automatic uncertain mutation replay",
+    "Independent runtime children and real Raft/PostgreSQL activation through remote Candidate adapters",
+    "Autonomous renewals before and after helper leader SIGKILL",
+    "SIGKILL of two of three runtimes, takeover on survivor, retained membership and original command outcome",
+    "Late SQL activation by old owner and preparation by restarted unassigned incarnation rejected",
+    "Quorum loss withdraws service readiness",
+    "Terminal registration conflict propagates its failure and closes runtime listener and pools"
+  ],
+  "review": {
+    "kind": "independent read-only code review, followed by one regression-tested fix pass",
+    "importantFixed": [
+      "Incomplete HTTP headers outlast the configured request deadline",
+      "Runtime adapters sharing a controller identity use independent Lamport clocks"
+    ],
+    "additionalRegressionFixed": "Terminal registration errors were suppressed by the run loop",
+    "deferredMinor": []
+  },
+  "limits": [
+    "Provisioned literal loopback control routes only; no LAN/container-network transport claim",
+    "Tokens authenticate trusted backend members; caller IDs are not per-node cryptographic credentials",
+    "No automatic Chord discovery, production participant RPC, ClientSession replay or SFU integration",
+    "Runtime tests exercise domain commands through a local IPC fixture rather than a migrated participant application",
+    "Sequential bounded renewal work can expire readiness under dependency latency or large assignment counts",
+    "Timed-out preparations retain admission until underlying work settles; a blackholed database connection can retain work and delay shutdown",
+    "Retained outcomes still grow toward the existing 32 MiB coordinator snapshot ceiling",
+    "Process failures on one host, not independent-host resilience or a general safety proof"
+  ]
+}

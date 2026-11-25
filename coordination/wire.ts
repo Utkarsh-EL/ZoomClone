@@ -45,6 +45,25 @@ export class ControlWire {
     return { version: 2, ...this.identity, requestId: randomUUID(), lamport: this.clock.tick(), kind: "control", body };
   }
 
+  /** Server-side validation precedes clock observation or dispatch. */
+  accept(value: unknown): Envelope {
+    if (!record(value) || value.version !== 2 || value.clusterId !== this.identity.clusterId
+      || typeof value.nodeId !== "string" || !UUID_PATTERN.test(value.nodeId)
+      || typeof value.incarnation !== "string" || !UUID_PATTERN.test(value.incarnation)
+      || typeof value.requestId !== "string" || !UUID_PATTERN.test(value.requestId)
+      || value.kind !== "control" || !("body" in value) || value.error !== undefined
+      || !Number.isSafeInteger(value.lamport) || (value.lamport as number) <= 0 || (value.lamport as number) >= Number.MAX_SAFE_INTEGER - 2) {
+      throw new ProtocolError("Invalid control request");
+    }
+    this.clock.receive(value.lamport as number);
+    return value as unknown as Envelope;
+  }
+
+  reply(request: Envelope, body: unknown, error?: Envelope["error"]): Envelope {
+    const packet = this.request(body);
+    return { ...packet, kind: "control.reply", requestId: request.requestId, ...(error ? { error } : {}) };
+  }
+
   receive(value: unknown, requestId: string, helperId: string): Envelope {
     if (!record(value) || value.version !== 2 || value.clusterId !== this.identity.clusterId || value.nodeId !== helperId
       || typeof value.incarnation !== "string" || !UUID_PATTERN.test(value.incarnation)

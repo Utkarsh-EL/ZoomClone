@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { HelperClient, type CommandResult, type HelperStatus, type MeetingMetadata, type MetadataCommand, type MetadataState } from "./helper-client.ts";
+import { HelperClient, type HelperAccess, type CommandResult, type HelperStatus, type MeetingMetadata, type MetadataCommand, type MetadataState } from "./helper-client.ts";
 import type { MeetingStore, Owner } from "../storage/meeting-store.ts";
 
-/** Trusted runtime adapter. Network authentication/routing belongs to the later gateway. */
+/** Preparation boundary; remote implementations authenticate and pin incarnation. */
 export interface Candidate {
   runtimeId: string;
   incarnation: string;
@@ -22,7 +22,7 @@ export function commandFor(owner: Owner, kind: MetadataCommand["kind"], revision
   return { id: randomUUID(), kind, meetingId: owner.meetingId, runtimeId: owner.runtimeId,
     incarnation: owner.incarnation, attemptId: owner.attemptId, expectedGeneration: owner.generation, expectedRevision: revision };
 }
-export async function commit(helper: HelperClient, command: MetadataCommand): Promise<CommandResult> {
+export async function commit(helper: HelperAccess, command: MetadataCommand): Promise<CommandResult> {
   const result = await helper.call<CommandResult>("apply", { command });
   if (result.code !== "OK") throw new Error(result.code);
   return result;

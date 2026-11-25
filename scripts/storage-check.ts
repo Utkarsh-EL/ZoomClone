@@ -21,6 +21,7 @@ try {
     "tests/storage.test.ts",
     "tests/storage-faults.test.ts",
     ...(process.argv.includes("--recovery") ? ["tests/recovery.test.ts"] : []),
+    ...(process.argv.includes("--runtimes") ? ["tests/runtime-process.test.ts"] : []),
   ]) {
     const child = spawn(process.execPath, ["--test", file], {
       cwd: projectRoot,

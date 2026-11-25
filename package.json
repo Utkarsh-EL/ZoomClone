@@ -6,9 +6,10 @@
     "node": ">=24.16"
   },
   "scripts": {
+    "test:runtimes": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes",
     "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",
-    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts tests/video.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts",
+    "test": "node --test tests/protocol.test.ts tests/integration.test.ts tests/p2p.test.ts tests/coordination.test.ts tests/video.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
     "test:coordinator": "node scripts/coordinator-build.ts --check",
     "test:consensus": "node scripts/coordinator-build.ts --consensus",

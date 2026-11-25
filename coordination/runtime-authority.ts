@@ -1,19 +1,19 @@
 import type { Authority, MeetingStore, Owner } from "../storage/meeting-store.ts";
-import { HelperClient, type MetadataState } from "./helper-client.ts";
+import type { HelperAccess, MetadataState } from "./helper-client.ts";
 import { commandFor, commit, matches } from "./recovery-controller.ts";
 
 /** Local readiness is a bounded observation; every domain transaction still
  * validates the SQL fence. Restart creates an unready gate. */
 export class RuntimeAuthority implements Authority {
   readonly owner: Readonly<Owner>;
-  private readonly helper: HelperClient;
-  private readonly store: MeetingStore;
+  private readonly helper: HelperAccess;
+  private readonly store: Pick<MeetingStore, "observe">;
   private readonly now: () => number;
   private readonly readinessMs: number;
   private until = -Infinity;
   private busy = false;
   private revision = 0;
-  constructor(helper: HelperClient, store: MeetingStore, owner: Owner, options: { readinessMs?: number; now?: () => number } = {}) {
+  constructor(helper: HelperAccess, store: Pick<MeetingStore, "observe">, owner: Owner, options: { readinessMs?: number; now?: () => number } = {}) {
     this.helper = helper; this.store = store; this.owner = Object.freeze({ ...owner });
     this.now = options.now ?? (() => performance.now()); this.readinessMs = options.readinessMs ?? 2000;
     if (!Number.isFinite(this.readinessMs) || this.readinessMs <= 0) throw new Error("Invalid readiness interval");

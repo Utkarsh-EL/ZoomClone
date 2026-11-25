@@ -24,6 +24,11 @@ export interface ControlArguments {
   expectedIndex?: number;
 }
 
+/** Narrow control boundary, also implemented by provisioned leader routing. */
+export interface HelperAccess {
+  call<T = unknown>(operation: Operation, args?: ControlArguments): Promise<T>;
+}
+
 export interface CommandResult { code: string; id: string; index: number; generation?: number; revision?: number }
 export interface Configuration { index: number; servers: { ID: string; Address: string; Suffrage: number }[]; voters: number; quorum: number }
 export interface HelperStatus {
