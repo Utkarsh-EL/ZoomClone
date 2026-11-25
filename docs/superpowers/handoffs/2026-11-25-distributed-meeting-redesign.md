@@ -15,6 +15,8 @@ Important review finding: pinned Raft `GetConfiguration().Index()` returns zero.
 
 Docker is installed but its daemon was unavailable during this checkpoint. PostgreSQL fencing, recovery reconciliation, Chord integration, ClientSession persistence/replay, SFU feasibility, complete proxy routing, supervisor, and dashboard remain future batches. The next evidence should cover dependency log/snapshot safety and PostgreSQL ownership races; follow with headless activation recovery. Do not mistake the new helper for a migrated meeting application.
 
+The user then enabled Docker and authorized continued implementation. Docker is reachable; an isolated PostgreSQL 18.7 Compose lab and fencing checkpoint are underway ([plan](../plans/2026-11-25-postgresql-fencing.md)). The parallel dependency audit **reproduced three Raft v1.8.0 safety failures**; see the coordinator guide for the opt-in failing regressions and upstream links. Live Raft-to-SQL ownership activation remains disabled. Do not equate the ordinary test suite (which explicitly skips the known-failing audit) with dependency safety.
+
 ## Read first
 
 1. [Current design](../specs/2026-11-21-distributed-meeting-redesign.md): authoritative design proposal, including ownership/recovery mechanics and acceptance evidence.

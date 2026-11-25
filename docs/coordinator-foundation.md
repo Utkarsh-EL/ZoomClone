@@ -88,7 +88,21 @@ Control requests have a 32-request concurrency bound, three-second operation con
 
 The pinned Raft version's `GetConfiguration().Index()` returns zero. The adapter implements the supported `ConfigurationStore` callback, snapshots the committed index, and passes that nonzero index to membership changes. If a newer configuration is pending, the library rejects the stale index. This avoids silently disabling version guards. See the [upstream report](https://github.com/hashicorp/raft/issues/722) and [ConfigurationStore API](https://pkg.go.dev/github.com/hashicorp/raft@v1.8.0#ConfigurationStore).
 
-Authoritative reads use a newly committed barrier rather than treating leader status or nonvoter reachability as proof of authority. The library also has [an open VerifyLeader/nonvoter report](https://github.com/hashicorp/raft/issues/725); this code does not rely on that optimization. Open upstream snapshot/log safety reports still need evaluation and adversarial suffix tests before this dependency authorizes external ownership transitions. This checkpoint is feasibility evidence, not a proof of the Raft implementation.
+Authoritative reads use a newly committed barrier rather than treating leader status or nonvoter reachability as proof of authority. The library also has [an open VerifyLeader/nonvoter report](https://github.com/hashicorp/raft/issues/725); this code does not rely on that optimization.
+
+**Subsequent safety audit: the pinned Raft dependency is blocked for ownership integration.** Three new regressions in `services/coordinator/safety_test.go` reproduce uncommitted metadata application ([#733](https://github.com/hashicorp/raft/issues/733)), rejection of valid post-snapshot appends ([#697](https://github.com/hashicorp/raft/issues/697)), and retention of divergent commands below a snapshot ([#721](https://github.com/hashicorp/raft/issues/721)). The tests use authenticated helper HTTP, its real FSM and Bolt store, with constructed partition-boundary histories. They do not claim to run a live partition/election. Barrier reads and disabled pipelining do not fix these bugs.
+
+Run the explicit known-failing audit in PowerShell:
+
+```powershell
+$env:GOPATH = Join-Path (Get-Location) '.cache/go'
+$env:GOCACHE = Join-Path (Get-Location) '.cache/go-build'
+$env:ZOOM_RAFT_SAFETY_AUDIT = '1'
+go -C services/coordinator test -run '^TestRaftSafety' -count=1 -v
+Remove-Item Env:\ZOOM_RAFT_SAFETY_AUDIT
+```
+
+All three currently fail their safety assertions (exit 1). The ordinary suite explicitly skips these opt-in reproductions; that green suite does not establish consensus safety. Proposed upstream fixes [#734](https://github.com/hashicorp/raft/pull/734) and [#735](https://github.com/hashicorp/raft/pull/735) were still unmerged at audit time. No safe upgrade has been selected. Do not activate external database/media ownership using this dependency until a reviewed replacement or fixed version passes these and live partition/recovery tests. Independent PostgreSQL fencing tests use explicit test assignments only.
 
 The next implementation plan should prove PostgreSQL fence/command races, stalled transaction timeouts, and resumable Raft-to-SQL activation before connecting participant or media controls. Docker Desktop must be running for that work. Preserve the SQL cutover rule and the separate media cutover; a successful assignment in this demo does not implement either one.
 
