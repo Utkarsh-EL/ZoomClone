@@ -43,9 +43,11 @@ type Result struct {
 }
 
 type Assignment struct {
-	RuntimeID   string `json:"runtimeId"`
-	Incarnation string `json:"incarnation"`
-	AttemptID   string `json:"attemptId"`
+	RuntimeID       string `json:"runtimeId"`
+	Incarnation     string `json:"incarnation"`
+	AttemptID       string `json:"attemptId"`
+	Phase           string `json:"phase"`
+	RenewalRevision uint64 `json:"renewalRevision"`
 }
 
 type Meeting struct {
@@ -124,7 +126,9 @@ func (c Command) valid() bool {
 	case "register":
 		return uuidPattern.MatchString(c.RuntimeID) && uuidPattern.MatchString(c.Incarnation) && c.MeetingID == "" && c.Code == "" && c.AttemptID == "" && c.ExpectedGeneration == 0
 	case "assign":
-		return uuidPattern.MatchString(c.MeetingID) && uuidPattern.MatchString(c.RuntimeID) && uuidPattern.MatchString(c.Incarnation) && uuidPattern.MatchString(c.AttemptID) && c.Code == "" && c.ExpectedRevision == 0
+		return uuidPattern.MatchString(c.MeetingID) && uuidPattern.MatchString(c.RuntimeID) && uuidPattern.MatchString(c.Incarnation) && uuidPattern.MatchString(c.AttemptID) && c.Code == ""
+	case "activation-intent", "confirm-ready", "renew":
+		return uuidPattern.MatchString(c.MeetingID) && uuidPattern.MatchString(c.RuntimeID) && uuidPattern.MatchString(c.Incarnation) && uuidPattern.MatchString(c.AttemptID) && c.Code == "" && c.ExpectedGeneration > 0
 	}
 	return false
 }
@@ -182,6 +186,10 @@ func (m *metadata) Apply(log *raft.Log) any {
 			r.Code = "GENERATION_CONFLICT"
 			break
 		}
+		if (meeting.Assignment != nil && meeting.Assignment.RenewalRevision != c.ExpectedRevision) || (meeting.Assignment == nil && c.ExpectedRevision != 0) {
+			r.Code = "REVISION_CONFLICT"
+			break
+		}
 		runtime, ok := m.s.Runtimes[c.RuntimeID]
 		if !ok || runtime.Incarnation != c.Incarnation {
 			r.Code = "RUNTIME_MISMATCH"
@@ -192,10 +200,47 @@ func (m *metadata) Apply(log *raft.Log) any {
 			break
 		}
 		meeting.Generation++
-		meeting.Assignment = &Assignment{RuntimeID: c.RuntimeID, Incarnation: c.Incarnation, AttemptID: c.AttemptID}
+		meeting.Assignment = &Assignment{RuntimeID: c.RuntimeID, Incarnation: c.Incarnation, AttemptID: c.AttemptID, Phase: "CANDIDATE"}
 		m.s.Meetings[c.MeetingID] = meeting
 		m.s.Attempts[c.AttemptID] = true
 		r.Generation = meeting.Generation
+	case "activation-intent", "confirm-ready", "renew":
+		meeting, ok := m.s.Meetings[c.MeetingID]
+		if !ok {
+			r.Code = "UNKNOWN_MEETING"
+			break
+		}
+		if meeting.Generation != c.ExpectedGeneration {
+			r.Code = "GENERATION_CONFLICT"
+			break
+		}
+		a := meeting.Assignment
+		if a == nil || a.RuntimeID != c.RuntimeID || a.Incarnation != c.Incarnation || a.AttemptID != c.AttemptID {
+			r.Code = "ASSIGNMENT_CONFLICT"
+			break
+		}
+		if a.RenewalRevision != c.ExpectedRevision {
+			r.Code = "REVISION_CONFLICT"
+			break
+		}
+		if c.Kind == "activation-intent" {
+			if a.Phase == "CANDIDATE" {
+				a.Phase = "INTENT"
+			}
+		} else if c.Kind == "confirm-ready" {
+			if a.Phase == "CANDIDATE" {
+				r.Code = "PHASE_CONFLICT"
+				break
+			}
+			a.Phase = "READY"
+		} else {
+			if a.Phase != "READY" {
+				r.Code = "PHASE_CONFLICT"
+				break
+			}
+			a.RenewalRevision++
+		}
+		r.Generation, r.Revision = meeting.Generation, a.RenewalRevision
 	}
 	m.s.Outcomes[c.ID] = savedOutcome{Digest: digest, Result: r}
 	return r
@@ -206,6 +251,20 @@ func (m *metadata) view() State {
 	defer m.mu.RUnlock()
 	// All fields are JSON values; cloning also detaches nested assignment pointers.
 	b, _ := json.Marshal(m.s)
+	var result State
+	_ = json.Unmarshal(b, &result)
+	return result
+}
+
+// Ordinary authority reads do not carry retained retry history. Periodic
+// renewals otherwise fill the bounded control reply even for one meeting.
+// Full history is retained by view() for snapshots and duplicate resolution.
+func (m *metadata) readView() State {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s := m.s
+	s.Outcomes, s.Attempts = nil, nil
+	b, _ := json.Marshal(s)
 	var result State
 	_ = json.Unmarshal(b, &result)
 	return result
@@ -258,7 +317,7 @@ func (m *metadata) Restore(reader io.ReadCloser) error {
 			return fmt.Errorf("invalid snapshot meeting")
 		}
 		if a := meeting.Assignment; a != nil {
-			if meeting.Generation == 0 || !uuidPattern.MatchString(a.RuntimeID) || !uuidPattern.MatchString(a.Incarnation) || !uuidPattern.MatchString(a.AttemptID) || !s.Attempts[a.AttemptID] {
+			if meeting.Generation == 0 || !uuidPattern.MatchString(a.RuntimeID) || !uuidPattern.MatchString(a.Incarnation) || !uuidPattern.MatchString(a.AttemptID) || !s.Attempts[a.AttemptID] || (a.Phase != "CANDIDATE" && a.Phase != "INTENT" && a.Phase != "READY") || a.RenewalRevision >= maxSafeInteger || (a.Phase != "READY" && a.RenewalRevision != 0) {
 				return fmt.Errorf("invalid snapshot assignment")
 			}
 		} else if meeting.Generation != 0 {

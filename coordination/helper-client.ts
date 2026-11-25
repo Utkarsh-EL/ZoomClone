@@ -7,7 +7,7 @@ export type Operation = "status" | "read" | "apply" | "configuration" | "add-non
 
 export interface MetadataCommand {
   id: string;
-  kind: "reserve" | "register" | "assign";
+  kind: "reserve" | "register" | "assign" | "activation-intent" | "confirm-ready" | "renew";
   meetingId?: string;
   code?: string;
   runtimeId?: string;
@@ -27,15 +27,17 @@ export interface ControlArguments {
 export interface CommandResult { code: string; id: string; index: number; generation?: number; revision?: number }
 export interface Configuration { index: number; servers: { ID: string; Address: string; Suffrage: number }[]; voters: number; quorum: number }
 export interface HelperStatus {
+  term: string;
   id: string; incarnation: string; address: string; role: string;
   leaderId: string; leaderAddress: string; applied: number; commit: number;
   configuration: Configuration; observation: string;
 }
+export interface Assignment { runtimeId: string; incarnation: string; attemptId: string; phase: "CANDIDATE" | "INTENT" | "READY"; renewalRevision: number }
+export interface MeetingMetadata { id: string; code: string; generation: number; assignment?: Assignment }
 export interface MetadataState {
   version: number; cluster: string; highWater: number;
-  meetings: Record<string, { id: string; code: string; generation: number; assignment?: { runtimeId: string; incarnation: string; attemptId: string } }>;
+  meetings: Record<string, MeetingMetadata>;
   runtimes: Record<string, { id: string; incarnation: string; revision: number }>;
-  outcomes: Record<string, { digest: string; result: CommandResult }>;
 }
 
 export class RemoteError extends Error {

@@ -39,7 +39,7 @@ type identity struct {
 
 // Histories produced by the old dependency may already contain incorrectly
 // applied outcomes. Keep them for inspection; never silently trust them again.
-const coordinatorStorageVersion = 2
+const coordinatorStorageVersion = 3
 
 type node struct {
 	cfg       nodeConfig
@@ -260,6 +260,7 @@ type configurationView struct {
 }
 
 type statusView struct {
+	Term          string            `json:"term"`
 	ID            string            `json:"id"`
 	Incarnation   string            `json:"incarnation"`
 	Address       string            `json:"address"`
@@ -298,12 +299,12 @@ func (n *node) control(ctx context.Context, request controlRequest) (any, error)
 			return nil, err
 		}
 		address, id := n.raft.LeaderWithID()
-		return statusView{ID: n.cfg.ID, Incarnation: n.wire.incarnation, Address: n.address, Role: n.raft.State().String(), LeaderID: string(id), LeaderAddress: string(address), Applied: n.raft.AppliedIndex(), Commit: n.raft.CommitIndex(), Configuration: configuration, Observation: "local; not an authority grant"}, nil
+		return statusView{Term: n.raft.Stats()["term"], ID: n.cfg.ID, Incarnation: n.wire.incarnation, Address: n.address, Role: n.raft.State().String(), LeaderID: string(id), LeaderAddress: string(address), Applied: n.raft.AppliedIndex(), Commit: n.raft.CommitIndex(), Configuration: configuration, Observation: "local; not an authority grant"}, nil
 	case "read":
 		if err := n.authoritative(ctx); err != nil {
 			return nil, err
 		}
-		return n.meta.view(), nil
+		return n.meta.readView(), nil
 	case "configuration":
 		if err := n.authoritative(ctx); err != nil {
 			return nil, err

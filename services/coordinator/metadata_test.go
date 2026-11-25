@@ -150,3 +150,57 @@ func TestMalformedMetadataCannotMutateState(t *testing.T) {
 		t.Fatal("invalid command mutated state")
 	}
 }
+
+func TestActivationAndRenewalGuardSupersededAttempts(t *testing.T) {
+	m := newMetadata(clusterID)
+	apply(t, m, 1, Command{ID: meetingID, Kind: "reserve", MeetingID: meetingID, Code: "activation"})
+	apply(t, m, 2, Command{ID: runtimeID, Kind: "register", RuntimeID: runtimeID, Incarnation: incarnation})
+	apply(t, m, 3, Command{ID: attemptID, Kind: "assign", MeetingID: meetingID, RuntimeID: runtimeID, Incarnation: incarnation, AttemptID: attemptID})
+	index := uint64(4)
+	send := func(kind string, revision uint64) Result {
+		index++
+		return apply(t, m, index, Command{ID: newUUID(), Kind: kind, MeetingID: meetingID, RuntimeID: runtimeID, Incarnation: incarnation, AttemptID: attemptID, ExpectedGeneration: 1, ExpectedRevision: revision})
+	}
+	if got := send("confirm-ready", 0); got.Code != "PHASE_CONFLICT" {
+		t.Fatal(got)
+	}
+	if got := send("activation-intent", 0); got.Code != "OK" {
+		t.Fatal(got)
+	}
+	if got := send("confirm-ready", 0); got.Code != "OK" {
+		t.Fatal(got)
+	}
+	if got := send("renew", 0); got.Code != "OK" || got.Revision != 1 {
+		t.Fatal(got)
+	}
+	if got := send("renew", 0); got.Code != "REVISION_CONFLICT" {
+		t.Fatal(got)
+	}
+	replacement := Command{ID: newUUID(), Kind: "assign", MeetingID: meetingID, RuntimeID: runtimeID, Incarnation: incarnation, AttemptID: newUUID(), ExpectedGeneration: 1}
+	if got := apply(t, m, 20, replacement); got.Code != "REVISION_CONFLICT" {
+		t.Fatal("stale suspicion replaced renewed owner", got)
+	}
+	replacement.ID = newUUID()
+	replacement.ExpectedRevision = 1
+	if got := apply(t, m, 21, replacement); got.Code != "OK" {
+		t.Fatal(got)
+	}
+	if got := send("confirm-ready", 1); got.Code != "GENERATION_CONFLICT" {
+		t.Fatal("late candidate became ready", got)
+	}
+	if got := send("renew", 1); got.Code != "GENERATION_CONFLICT" {
+		t.Fatal(got)
+	}
+	snapshot, _ := m.Snapshot()
+	sink := &memorySink{}
+	_ = snapshot.Persist(sink)
+	restored := newMetadata(clusterID)
+	if err := restored.Restore(io.NopCloser(bytes.NewReader(sink.Bytes()))); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(m.view())
+	c, _ := json.Marshal(restored.view())
+	if !bytes.Equal(b, c) {
+		t.Fatal("activation state not retained")
+	}
+}
