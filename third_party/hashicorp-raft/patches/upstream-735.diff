@@ -1,0 +1,885 @@
+diff --git a/raft.go b/raft.go
+index 6e7a04be..ba7578f7 100644
+--- a/raft.go
++++ b/raft.go
+@@ -1891,6 +1891,16 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 		}
+ 		reqConfigurationIndex = req.LastLogIndex
+ 	}
++
++	// Check our logs against the snapshot before changing anything, so that a
++	// log store error fails the install cleanly.
++	keepLogs, err := r.logsMatchSnapshot(req.LastLogIndex, req.LastLogTerm)
++	if err != nil {
++		r.logger.Error("failed to check logs against snapshot", "error", err)
++		rpcErr = err
++		return
++	}
++
+ 	version := getSnapshotVersion(r.protocolVersion)
+ 	sink, err := r.snapshots.Create(version, req.LastLogIndex, req.LastLogTerm,
+ 		reqConfiguration, reqConfigurationIndex, r.trans)
+@@ -1960,6 +1970,21 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 	r.setLatestConfiguration(reqConfiguration, reqConfigurationIndex)
+ 	r.setCommittedConfiguration(reqConfiguration, reqConfigurationIndex)
+ 
++	// Keep our logs only if they agree with the snapshot (Raft paper, Figure
++	// 13, steps 6 and 7; checked above). Otherwise the entries above our
++	// commit index may be divergent and never committed: compaction would
++	// keep those below the snapshot index (up to TrailingLogs), from where
++	// this server could later replicate them as leader, and one at the
++	// snapshot index would fail every following AppendEntries consistency
++	// check.
++	if !keepLogs {
++		if err := r.discardUncommittedLogs(); err != nil {
++			r.logger.Error("failed to discard uncommitted logs", "error", err)
++			rpcErr = err
++			return
++		}
++	}
++
+ 	// Clear old logs if r.logs is a MonotonicLogStore. Otherwise compact the
+ 	// logs. In both cases, log any errors and continue.
+ 	if mlogs, ok := r.logs.(MonotonicLogStore); ok && mlogs.IsMonotonic() {
+diff --git a/snapshot.go b/snapshot.go
+index 8b530f81..e9e3aabc 100644
+--- a/snapshot.go
++++ b/snapshot.go
+@@ -220,6 +220,12 @@ func (r *Raft) compactLogsWithTrailing(snapIdx uint64, lastLogIdx uint64, traili
+ 	if err != nil {
+ 		return fmt.Errorf("failed to get first log index: %v", err)
+ 	}
++	// An empty store reports 0 here, and lastLogIdx may still name an entry
++	// compacted earlier. Deleting from 0 would wrap InmemStore's last index
++	// around to MaxUint64.
++	if minLog == 0 {
++		return nil
++	}
+ 
+ 	// Check if we have enough logs to truncate
+ 	// Use a consistent value for trailingLogs for the duration of this method
+@@ -259,6 +265,68 @@ func (r *Raft) compactLogs(snapIdx uint64) error {
+ 	return r.compactLogsWithTrailing(snapIdx, lastLogIdx, trailingLogs)
+ }
+ 
++// logsMatchSnapshot reports whether our logs agree with a snapshot whose last
++// entry is at index with term. They do if that index is committed here, or if
++// our entry at that index has the same term: by the Log Matching property every
++// entry up to it then matches the leader's. Otherwise our entry there is
++// missing or conflicts.
++func (r *Raft) logsMatchSnapshot(index, term uint64) (bool, error) {
++	if index <= r.getCommitIndex() {
++		return true, nil
++	}
++	var entry Log
++	if err := r.logs.GetLog(index, &entry); err != nil {
++		if errors.Is(err, ErrLogNotFound) {
++			return false, nil
++		}
++		return false, fmt.Errorf("failed to get log %d: %w", index, err)
++	}
++	return entry.Term == term, nil
++}
++
++// discardUncommittedLogs deletes every entry above our commit index. It is used
++// when the logs don't match an installed snapshot. Entries up to our commit
++// index are committed, so they match the leader's log. Above it, the snapshot
++// covers every committed entry up to its index. No entry of ours above the
++// snapshot index is committed either: if our entry at the snapshot index
++// conflicts, by Log Matching no later entry of ours is in the leader's log; and
++// the leader sends a snapshot only after AppendEntries found no entry of ours
++// that matches its log beyond the snapshot index.
++//
++// It then sets the last log to the store's last entry, which is at or below
++// the commit index and so below the snapshot index; getLastEntry then reports
++// the snapshot. Installing a snapshot didn't change the last log before this
++// check was added, so a lagging follower was already left in this state. The
++// last log must not name the snapshot index instead: compaction keeps
++// TrailingLogs back from the last log, so it would delete entries counting
++// from past the store's end.
++func (r *Raft) discardUncommittedLogs() error {
++	last, err := r.logs.LastIndex()
++	if err != nil {
++		return fmt.Errorf("failed to get last log index: %w", err)
++	}
++	if commit := r.getCommitIndex(); last > commit {
++		r.logger.Warn("discarding uncommitted logs that don't match the installed snapshot",
++			"from", commit+1, "to", last)
++		if err := r.logs.DeleteRange(commit+1, last); err != nil {
++			return err
++		}
++		if last, err = r.logs.LastIndex(); err != nil {
++			return fmt.Errorf("failed to get last log index: %w", err)
++		}
++	}
++	var term uint64
++	if last > 0 {
++		var entry Log
++		if err := r.logs.GetLog(last, &entry); err != nil {
++			return fmt.Errorf("failed to get log %d: %w", last, err)
++		}
++		term = entry.Term
++	}
++	r.setLastLog(last, term)
++	return nil
++}
++
+ // removeOldLogs removes all old logs from the store. This is used for
+ // MonotonicLogStores after restore. Callers should verify that the store
+ // implementation is monotonic prior to calling.
+diff --git a/snapshot_divergence_test.go b/snapshot_divergence_test.go
+new file mode 100644
+index 00000000..a7b4b6c0
+--- /dev/null
++++ b/snapshot_divergence_test.go
+@@ -0,0 +1,263 @@
++// SPDX-License-Identifier: MPL-2.0
++
++package raft
++
++import (
++	"bytes"
++	"fmt"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++)
++
++// installSnapshot sends an InstallSnapshot for index and term from the fake
++// leader and requires it to succeed.
++func (f *testFollower) installSnapshot(t *testing.T, term, index, snapTerm uint64) {
++	t.Helper()
++	resp, err := f.sendSnapshot(term, index, snapTerm)
++	require.NoError(t, err)
++	require.True(t, resp.Success, "install rejected: %+v", resp)
++}
++
++// sendSnapshot sends an InstallSnapshot for index and term from the fake
++// leader, carrying the configuration newTestFollower starts with.
++func (f *testFollower) sendSnapshot(term, index, snapTerm uint64) (InstallSnapshotResponse, error) {
++	data := []byte("snapshot")
++	req := InstallSnapshotRequest{
++		RPCHeader:          f.header(),
++		SnapshotVersion:    SnapshotVersionMax,
++		Term:               term,
++		LastLogIndex:       index,
++		LastLogTerm:        snapTerm,
++		Configuration:      EncodeConfiguration(testFollowerConf),
++		ConfigurationIndex: 1,
++		Size:               int64(len(data)),
++	}
++	var resp InstallSnapshotResponse
++	err := f.leader.InstallSnapshot("f", "f", &req, &resp, bytes.NewReader(data))
++	return resp, err
++}
++
++// storedTerms returns the term of every entry in the follower's log store.
++func (f *testFollower) storedTerms(t *testing.T) map[uint64]uint64 {
++	t.Helper()
++	first, err := f.store.FirstIndex()
++	require.NoError(t, err)
++	last, err := f.store.LastIndex()
++	require.NoError(t, err)
++	terms := map[uint64]uint64{}
++	for i := first; i <= last && last > 0; i++ {
++		var l Log
++		require.NoError(t, f.store.GetLog(i, &l))
++		terms[i] = l.Term
++	}
++	return terms
++}
++
++// A follower holding divergent, never-committed entries must not keep them
++// when it installs a snapshot: below the snapshot index they could later be
++// replicated by this server as leader (hashicorp/raft#721), and at the
++// snapshot index one makes every following AppendEntries fail its consistency
++// check, so the leader sends the snapshot again and again (#697).
++func TestRaft_InstallSnapshot_DiscardsDivergentLogs(t *testing.T) {
++	cases := []struct {
++		name      string
++		lastStale uint64 // the follower's stale term-2 entries are 3..lastStale
++		snapIndex uint64
++	}{
++		{"stale entries at and beyond the snapshot index", 5, 4},
++		{"log ends below the snapshot index", 3, 5},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			entries := []*Log{cmd(2, 1, "committed")}
++			for i := uint64(3); i <= tc.lastStale; i++ {
++				entries = append(entries, cmd(i, 2, fmt.Sprintf("stale-%d", i)))
++			}
++			f := newTestFollower(t, 2, entries...)
++
++			// Leader l (term 3) commits 1-2 on f, then sends a snapshot of
++			// its own log, whose entries 3 onwards are from term 3.
++			f.appendEntries(t, AppendEntriesRequest{Term: 3, PrevLogEntry: 2, PrevLogTerm: 1, LeaderCommitIndex: 2})
++			f.requireCommitted(t, 2, 2)
++			f.installSnapshot(t, 3, tc.snapIndex, 3)
++
++			// Only the committed entries 1-2 remain.
++			require.Equal(t, map[uint64]uint64{1: 1, 2: 1}, f.storedTerms(t), "uncommitted entries survived a conflicting snapshot")
++			require.Equal(t, tc.snapIndex, f.r.LastIndex())
++
++			// The leader's next append, right after the snapshot, succeeds.
++			next := tc.snapIndex + 1
++			f.appendEntries(t, AppendEntriesRequest{Term: 3, PrevLogEntry: tc.snapIndex, PrevLogTerm: 3,
++				LeaderCommitIndex: next, Entries: []*Log{cmd(next, 3, "leader")}})
++			f.requireCommitted(t, next, next)
++			f.fsm.waitApplied(t, next)
++			for _, l := range f.fsm.logs() {
++				require.NotContains(t, string(l.Data), "stale", "applied a never-committed entry")
++			}
++		})
++	}
++}
++
++// A log that agrees with the snapshot keeps its entries beyond it.
++func TestRaft_InstallSnapshot_KeepsMatchingLogs(t *testing.T) {
++	t.Run("entry at the snapshot index has its term", func(t *testing.T) {
++		f := newTestFollower(t, 1, cmd(2, 1, "a"), cmd(3, 1, "b"), cmd(4, 1, "c"), cmd(5, 1, "d"), cmd(6, 1, "e"))
++		f.installSnapshot(t, 1, 4, 1)
++
++		terms := f.storedTerms(t)
++		require.Equal(t, uint64(1), terms[5])
++		require.Equal(t, uint64(1), terms[6])
++		require.Equal(t, uint64(6), f.r.LastIndex())
++		f.appendEntries(t, AppendEntriesRequest{Term: 1, PrevLogEntry: 6, PrevLogTerm: 1, LeaderCommitIndex: 6})
++		f.requireCommitted(t, 6, 6)
++	})
++
++	// The snapshot index is committed here but its entry was compacted away.
++	// The entries above it may be committed through this server, so they
++	// must stay.
++	t.Run("snapshot index already committed", func(t *testing.T) {
++		f := newTestFollower(t, 1, cmd(2, 1, "a"), cmd(3, 1, "b"), cmd(4, 1, "c"), cmd(5, 1, "d"), cmd(6, 1, "e"))
++		f.appendEntries(t, AppendEntriesRequest{Term: 1, PrevLogEntry: 6, PrevLogTerm: 1, LeaderCommitIndex: 6})
++		f.requireCommitted(t, 6, 6)
++		require.NoError(t, f.store.DeleteRange(1, 4))
++		f.installSnapshot(t, 1, 4, 1)
++
++		terms := f.storedTerms(t)
++		require.Equal(t, uint64(1), terms[5])
++		require.Equal(t, uint64(1), terms[6])
++		require.Equal(t, uint64(6), f.r.LastIndex())
++	})
++}
++
++// histFSM records every Apply, and is never reset by Restore.
++type histFSM struct {
++	*MockFSM
++	mu   sync.Mutex
++	hist []string
++}
++
++func (h *histFSM) Apply(l *Log) interface{} {
++	h.mu.Lock()
++	h.hist = append(h.hist, fmt.Sprintf("%d/t%d/%s", l.Index, l.Term, l.Data))
++	h.mu.Unlock()
++	return h.MockFSM.Apply(l)
++}
++
++func (h *histFSM) Underlying() FSM { return h.MockFSM }
++
++func (h *histFSM) history() []string {
++	h.mu.Lock()
++	defer h.mu.Unlock()
++	return append([]string{}, h.hist...)
++}
++
++func waitForCondition(t *testing.T, what string, d time.Duration, cond func() bool) {
++	t.Helper()
++	deadline := time.Now().Add(d)
++	for time.Now().Before(deadline) {
++		if cond() {
++			return
++		}
++		time.Sleep(10 * time.Millisecond)
++	}
++	t.Fatalf("timeout waiting for %s", what)
++}
++
++// End to end: a follower with divergent entries installs a snapshot, becomes
++// leader, and a new server that joins must not apply the divergent entries.
++// Adapted from the reproduction in hashicorp/raft#721 by Shashank Mohan Jain.
++func TestRaft_InstallSnapshot_DivergentEntriesNotReplicated(t *testing.T) {
++	conf := inmemConfig(t)
++	conf.TrailingLogs = 500 // >= the divergent follower's last index
++	conf.SnapshotThreshold = 1 << 40
++	conf.SnapshotInterval = time.Hour
++	mk := func() FSM { return &histFSM{MockFSM: &MockFSM{}} }
++	c := MakeClusterCustom(t, &MakeClusterOpts{Peers: 5, Bootstrap: true, Conf: conf, MakeFSMFunc: mk})
++	defer c.Close()
++
++	// 1. A committed prefix.
++	A := c.Leader()
++	for i := 0; i < 10; i++ {
++		require.NoError(t, A.Apply([]byte(fmt.Sprintf("good-%d", i)), time.Second).Error())
++	}
++	waitForCondition(t, "prefix replicated", 5*time.Second, func() bool {
++		for _, r := range c.rafts {
++			if r.AppliedIndex() < A.getLastIndex() {
++				return false
++			}
++		}
++		return true
++	})
++	F := c.Followers()[0]
++
++	// 2. Partition {A, F} from the rest. A, still leader until its lease
++	// runs out, appends entries that reach only F and never commit.
++	c.Partition([]ServerAddress{A.localAddr, F.localAddr})
++	for i := 0; i < 200; i++ {
++		A.Apply([]byte(fmt.Sprintf("STALE-%d", i)), 50*time.Millisecond)
++	}
++	var fLast uint64
++	waitForCondition(t, "F to receive stale entries", 3*time.Second, func() bool {
++		l := F.getLastIndex()
++		stable := l == fLast && l > 11
++		fLast = l
++		return stable && l >= 50
++	})
++
++	// 3. The majority elects a new leader L, which commits new entries and
++	// takes a snapshot.
++	var L *Raft
++	waitForCondition(t, "new leader on majority side", 5*time.Second, func() bool {
++		for _, r := range c.rafts {
++			if r != A && r != F && r.State() == Leader {
++				L = r
++				return true
++			}
++		}
++		return false
++	})
++	var fut Future
++	for i := 0; i < 1300; i++ {
++		fut = L.Apply([]byte(fmt.Sprintf("new-%d", i)), 5*time.Second)
++	}
++	require.NoError(t, fut.Error())
++	require.NoError(t, L.Snapshot().Error())
++	snapIdx, _ := L.getLastSnapshot()
++
++	// 4. A goes away; F rejoins and catches up through the snapshot.
++	require.NoError(t, A.Shutdown().Error())
++	c.FullyConnect()
++	c.Disconnect(A.localAddr)
++	waitForCondition(t, "F to catch up via snapshot", 30*time.Second, func() bool {
++		s, _ := F.getLastSnapshot()
++		return s >= snapIdx && F.AppliedIndex() >= L.getLastIndex()
++	})
++
++	// 5. F becomes leader, then a new server joins and replicates from it.
++	require.NoError(t, L.LeadershipTransferToServer(F.localID, F.localAddr).Error())
++	waitForCondition(t, "F leader", 5*time.Second, func() bool { return F.State() == Leader })
++	c1, err := makeCluster(t, &MakeClusterOpts{Peers: 1, Bootstrap: false, Conf: conf, MakeFSMFunc: mk})
++	require.NoError(t, err)
++	c.Merge(c1)
++	c.FullyConnect()
++	c.Disconnect(A.localAddr)
++	N := c1.rafts[0]
++	require.NoError(t, F.AddNonvoter(N.localID, N.localAddr, 0, 5*time.Second).Error())
++	waitForCondition(t, "N to catch up", 20*time.Second, func() bool { return N.AppliedIndex() >= F.getCommitIndex()-1 })
++
++	// 6. N must not have applied any entry that was never committed.
++	stale, first := 0, ""
++	for _, e := range c.fsms[len(c.fsms)-1].(*histFSM).history() {
++		if strings.Contains(e, "STALE-") {
++			if stale == 0 {
++				first = e
++			}
++			stale++
++		}
++	}
++	require.Zero(t, stale, "N applied never-committed entries; the first: %s", first)
++}
+diff --git a/snapshot_lagging_test.go b/snapshot_lagging_test.go
+new file mode 100644
+index 00000000..bbc8df3d
+--- /dev/null
++++ b/snapshot_lagging_test.go
+@@ -0,0 +1,344 @@
++// SPDX-License-Identifier: MPL-2.0
++
++package raft
++
++import (
++	"errors"
++	"fmt"
++	"sort"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++)
++
++// boltLikeLogStore is a LogStore with raft-boltdb's semantics: FirstIndex and
++// LastIndex come from the keys present (0 when empty), and DeleteRange only
++// visits keys present in [min, max]. Unlike InmemStore, it keeps no low and
++// high index that a DeleteRange beyond the stored range can corrupt.
++type boltLikeLogStore struct {
++	mu   sync.Mutex
++	logs map[uint64]Log
++}
++
++func newBoltLikeLogStore() *boltLikeLogStore {
++	return &boltLikeLogStore{logs: map[uint64]Log{}}
++}
++
++func (s *boltLikeLogStore) keys() []uint64 {
++	keys := make([]uint64, 0, len(s.logs))
++	for k := range s.logs {
++		keys = append(keys, k)
++	}
++	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
++	return keys
++}
++
++func (s *boltLikeLogStore) FirstIndex() (uint64, error) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	if k := s.keys(); len(k) > 0 {
++		return k[0], nil
++	}
++	return 0, nil
++}
++
++func (s *boltLikeLogStore) LastIndex() (uint64, error) {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	if k := s.keys(); len(k) > 0 {
++		return k[len(k)-1], nil
++	}
++	return 0, nil
++}
++
++func (s *boltLikeLogStore) GetLog(index uint64, log *Log) error {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	l, ok := s.logs[index]
++	if !ok {
++		return ErrLogNotFound
++	}
++	*log = l
++	return nil
++}
++
++func (s *boltLikeLogStore) StoreLog(log *Log) error { return s.StoreLogs([]*Log{log}) }
++
++func (s *boltLikeLogStore) StoreLogs(logs []*Log) error {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	for _, l := range logs {
++		s.logs[l.Index] = *l
++	}
++	return nil
++}
++
++func (s *boltLikeLogStore) DeleteRange(min, max uint64) error {
++	s.mu.Lock()
++	defer s.mu.Unlock()
++	for _, k := range s.keys() {
++		if k >= min && k <= max {
++			delete(s.logs, k)
++		}
++	}
++	return nil
++}
++
++// flakyDeletes fails the next fails calls to DeleteRange.
++type flakyDeletes struct {
++	LogStore
++	mu    sync.Mutex
++	fails int
++}
++
++func (s *flakyDeletes) DeleteRange(min, max uint64) error {
++	s.mu.Lock()
++	if s.fails > 0 {
++		s.fails--
++		s.mu.Unlock()
++		return errors.New("injected DeleteRange failure")
++	}
++	s.mu.Unlock()
++	return s.LogStore.DeleteRange(min, max)
++}
++
++var testLogStores = []struct {
++	name string
++	new  func() LogStore
++}{
++	{"InmemStore", func() LogStore { return NewInmemStore() }},
++	{"bolt-like", func() LogStore { return newBoltLikeLogStore() }},
++}
++
++func confLog() *Log {
++	return &Log{Index: 1, Term: 1, Type: LogConfiguration, Data: EncodeConfiguration(testFollowerConf)}
++}
++
++func (f *testFollower) setTrailingLogs(t *testing.T, n uint64) {
++	t.Helper()
++	rc := f.r.ReloadableConfig()
++	rc.TrailingLogs = n
++	require.NoError(t, f.r.ReloadConfig(rc))
++}
++
++// stored returns the term of every entry in the follower's log store, which
++// may have gaps.
++func (f *testFollower) stored(t *testing.T) map[uint64]uint64 {
++	t.Helper()
++	first, err := f.store.FirstIndex()
++	require.NoError(t, err)
++	last, err := f.store.LastIndex()
++	require.NoError(t, err)
++	require.Less(t, last, uint64(1000), "the log store's last index is corrupt")
++	terms := map[uint64]uint64{}
++	for i := first; i <= last && last > 0; i++ {
++		var l Log
++		err := f.store.GetLog(i, &l)
++		if errors.Is(err, ErrLogNotFound) {
++			continue
++		}
++		require.NoError(t, err)
++		terms[i] = l.Term
++	}
++	return terms
++}
++
++// After a snapshot install the follower's log store holds what it should, its
++// last log never points past the store's end, and the leader's next append
++// succeeds. On InmemStore the lagging, empty-log and divergent TrailingLogs 0
++// cases hang on the parent commit: recording the snapshot index as the last log made compaction call
++// DeleteRange(0, x) on an empty InmemStore, which wraps its last index to
++// MaxUint64, and the next install's DeleteRange(commit+1, MaxUint64) never
++// ends.
++func TestRaft_InstallSnapshot_LogIndexes(t *testing.T) {
++	type install struct{ index, term uint64 }
++	stale := func(from, to, term uint64) []*Log {
++		var l []*Log
++		for i := from; i <= to; i++ {
++			l = append(l, cmd(i, term, fmt.Sprintf("stale-%d", i)))
++		}
++		return l
++	}
++	committed := func(from, to, term uint64) []*Log {
++		var l []*Log
++		for i := from; i <= to; i++ {
++			l = append(l, cmd(i, term, fmt.Sprintf("c-%d", i)))
++		}
++		return l
++	}
++	cases := []struct {
++		name         string
++		logs         []*Log
++		followerTerm uint64
++		leaderTerm   uint64
++		commit       uint64 // the leader's first append commits up to here
++		trailing     uint64
++		installs     []install
++		wantStored   map[uint64]uint64
++		wantLastLog  uint64
++		wantLast     uint64 // LastIndex(): max(last log, snapshot)
++	}{
++		{
++			name: "lagging follower, repeated installs, TrailingLogs 0",
++			logs: append([]*Log{confLog()}, committed(2, 3, 1)...), followerTerm: 1, leaderTerm: 2, commit: 3,
++			trailing: 0, installs: []install{{10, 2}, {20, 2}, {30, 2}},
++			wantStored: map[uint64]uint64{}, wantLastLog: 0, wantLast: 30,
++		},
++		{
++			name: "lagging follower, repeated installs, TrailingLogs 2",
++			logs: append([]*Log{confLog()}, committed(2, 3, 1)...), followerTerm: 1, leaderTerm: 2, commit: 3,
++			trailing: 2, installs: []install{{10, 2}, {20, 2}, {30, 2}},
++			wantStored: map[uint64]uint64{2: 1, 3: 1}, wantLastLog: 3, wantLast: 30,
++		},
++		{
++			name: "empty log, repeated installs",
++			logs: nil, followerTerm: 0, leaderTerm: 2, commit: 0,
++			trailing: 0, installs: []install{{10, 2}, {20, 2}},
++			wantStored: map[uint64]uint64{}, wantLastLog: 0, wantLast: 20,
++		},
++		{
++			name: "matching log beyond the snapshot is kept",
++			logs: append([]*Log{confLog()}, committed(2, 8, 1)...), followerTerm: 1, leaderTerm: 1, commit: 2,
++			trailing: 2, installs: []install{{5, 1}},
++			wantStored: map[uint64]uint64{6: 1, 7: 1, 8: 1}, wantLastLog: 8, wantLast: 8,
++		},
++		{
++			name: "divergent tail above the commit index is discarded",
++			logs: append([]*Log{confLog(), cmd(2, 1, "c-2")}, stale(3, 8, 2)...), followerTerm: 2, leaderTerm: 3, commit: 2,
++			trailing: 2, installs: []install{{5, 3}},
++			wantStored: map[uint64]uint64{1: 1, 2: 1}, wantLastLog: 2, wantLast: 5,
++		},
++		{
++			name: "divergent tail, TrailingLogs 0, repeated installs",
++			logs: append([]*Log{confLog(), cmd(2, 1, "c-2")}, stale(3, 8, 2)...), followerTerm: 2, leaderTerm: 3, commit: 2,
++			trailing: 0, installs: []install{{5, 3}, {10, 3}, {15, 3}},
++			wantStored: map[uint64]uint64{}, wantLastLog: 0, wantLast: 15,
++		},
++		{
++			name: "snapshot index at the last entry, matching",
++			logs: append([]*Log{confLog()}, committed(2, 5, 1)...), followerTerm: 1, leaderTerm: 1, commit: 2,
++			trailing: 2, installs: []install{{5, 1}},
++			wantStored: map[uint64]uint64{4: 1, 5: 1}, wantLastLog: 5, wantLast: 5,
++		},
++		{
++			name: "snapshot index at the last entry, conflicting",
++			logs: append([]*Log{confLog(), cmd(2, 1, "c-2")}, stale(3, 5, 2)...), followerTerm: 2, leaderTerm: 3, commit: 2,
++			trailing: 2, installs: []install{{5, 3}},
++			wantStored: map[uint64]uint64{1: 1, 2: 1}, wantLastLog: 2, wantLast: 5,
++		},
++	}
++	for _, st := range testLogStores {
++		for _, tc := range cases {
++			t.Run(st.name+"/"+tc.name, func(t *testing.T) {
++				f := newTestFollowerOn(t, st.new(), tc.followerTerm, tc.logs...)
++				f.setTrailingLogs(t, tc.trailing)
++				var prevTerm uint64
++				for _, l := range tc.logs {
++					if l.Index == tc.commit {
++						prevTerm = l.Term
++					}
++				}
++				f.appendEntries(t, AppendEntriesRequest{Term: tc.leaderTerm, PrevLogEntry: tc.commit, PrevLogTerm: prevTerm, LeaderCommitIndex: tc.commit})
++				f.requireCommitted(t, tc.commit, tc.commit)
++				for _, in := range tc.installs {
++					f.installSnapshot(t, tc.leaderTerm, in.index, in.term)
++				}
++
++				require.Equal(t, tc.wantStored, f.stored(t), "log store")
++				lastLog, _ := f.r.getLastLog()
++				require.Equal(t, tc.wantLastLog, lastLog, "last log")
++				require.Equal(t, tc.wantLast, f.r.LastIndex())
++
++				// The leader's next append, right after our last index, succeeds.
++				next := tc.wantLast + 1
++				f.appendEntries(t, AppendEntriesRequest{Term: tc.leaderTerm, PrevLogEntry: tc.wantLast, PrevLogTerm: tc.leaderTerm,
++					LeaderCommitIndex: next, Entries: []*Log{cmd(next, tc.leaderTerm, "leader")}})
++				f.requireCommitted(t, next, next)
++				lastLog, _ = f.r.getLastLog()
++				require.Equal(t, next, lastLog, "last log after the append")
++				require.Equal(t, tc.leaderTerm, f.stored(t)[next])
++				f.fsm.waitApplied(t, next)
++				for _, l := range f.fsm.logs() {
++					require.NotContains(t, string(l.Data), "stale", "applied a never-committed entry")
++				}
++			})
++		}
++	}
++}
++
++// Compaction must leave an empty log store alone. Here the follower's own
++// snapshot with TrailingLogs 0 empties the store while the last log stays at
++// the compacted index 5; installing a snapshot that matches then compacts
++// again. Without the empty-store check that called DeleteRange(0, 5), which
++// on InmemStore wraps its last index to MaxUint64 (also on v1.8.0).
++func TestRaft_InstallSnapshot_CompactsEmptyStore(t *testing.T) {
++	for _, st := range testLogStores {
++		t.Run(st.name, func(t *testing.T) {
++			f := newTestFollowerOn(t, st.new(), 1, confLog(), cmd(2, 1, "a"), cmd(3, 1, "b"), cmd(4, 1, "c"), cmd(5, 1, "d"))
++			f.setTrailingLogs(t, 0)
++			f.appendEntries(t, AppendEntriesRequest{Term: 1, PrevLogEntry: 5, PrevLogTerm: 1, LeaderCommitIndex: 5})
++			f.requireCommitted(t, 5, 5)
++			// The FSM goroutine applies 1-5 asynchronously; until it has,
++			// there is nothing new to snapshot.
++			waitForCondition(t, "a snapshot of 1-5", 5*time.Second, func() bool {
++				err := f.r.Snapshot().Error()
++				require.True(t, err == nil || errors.Is(err, ErrNothingNewToSnapshot), "snapshot: %v", err)
++				return err == nil
++			})
++			require.Equal(t, map[uint64]uint64{}, f.stored(t))
++
++			f.installSnapshot(t, 1, 5, 1)
++			require.Equal(t, map[uint64]uint64{}, f.stored(t), "log store")
++			require.Equal(t, uint64(5), f.r.LastIndex())
++
++			f.appendEntries(t, AppendEntriesRequest{Term: 1, PrevLogEntry: 5, PrevLogTerm: 1,
++				LeaderCommitIndex: 6, Entries: []*Log{cmd(6, 1, "e")}})
++			f.requireCommitted(t, 6, 6)
++			require.Equal(t, map[uint64]uint64{6: 1}, f.stored(t))
++		})
++	}
++}
++
++// A log store error while discarding fails the install; the follower still
++// rejects appends that need the snapshot, and the leader's retry, once the
++// store works again, leaves the expected log.
++func TestRaft_InstallSnapshot_RetriesAfterLogStoreError(t *testing.T) {
++	for _, st := range testLogStores {
++		t.Run(st.name, func(t *testing.T) {
++			store := &flakyDeletes{LogStore: st.new()}
++			logs := []*Log{confLog(), cmd(2, 1, "c-2")}
++			for i := uint64(3); i <= 8; i++ {
++				logs = append(logs, cmd(i, 2, fmt.Sprintf("stale-%d", i)))
++			}
++			f := newTestFollowerOn(t, store, 2, logs...)
++			f.setTrailingLogs(t, 0)
++			f.appendEntries(t, AppendEntriesRequest{Term: 3, PrevLogEntry: 2, PrevLogTerm: 1, LeaderCommitIndex: 2})
++
++			store.mu.Lock()
++			store.fails = 1
++			store.mu.Unlock()
++			resp, err := f.sendSnapshot(3, 5, 3)
++			require.Error(t, err, "install succeeded: %+v", resp)
++
++			// Our entry 5 still conflicts, so an append after it is rejected
++			// and the leader falls back to the snapshot again.
++			req := AppendEntriesRequest{RPCHeader: f.header(), Term: 3, PrevLogEntry: 5, PrevLogTerm: 3, LeaderCommitIndex: 5}
++			var aresp AppendEntriesResponse
++			require.NoError(t, f.leader.AppendEntries("f", "f", &req, &aresp))
++			require.False(t, aresp.Success, "append after a failed install accepted")
++
++			f.installSnapshot(t, 3, 5, 3)
++			require.Equal(t, map[uint64]uint64{}, f.stored(t), "log store")
++			lastLog, _ := f.r.getLastLog()
++			require.Equal(t, uint64(2), lastLog, "last log")
++			require.Equal(t, uint64(5), f.r.LastIndex())
++
++			f.appendEntries(t, AppendEntriesRequest{Term: 3, PrevLogEntry: 5, PrevLogTerm: 3,
++				LeaderCommitIndex: 6, Entries: []*Log{cmd(6, 3, "leader")}})
++			f.requireCommitted(t, 6, 6)
++			require.Equal(t, map[uint64]uint64{6: 3}, f.stored(t))
++		})
++	}
++}
+diff --git a/testfollower_test.go b/testfollower_test.go
+new file mode 100644
+index 00000000..ed27a942
+--- /dev/null
++++ b/testfollower_test.go
+@@ -0,0 +1,130 @@
++// SPDX-License-Identifier: MPL-2.0
++
++package raft
++
++import (
++	"io"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++)
++
++// recordingFSM records the index, term and data of every log it applies.
++type recordingFSM struct {
++	mu      sync.Mutex
++	applied []Log
++}
++
++func (f *recordingFSM) Apply(l *Log) interface{} {
++	f.mu.Lock()
++	defer f.mu.Unlock()
++	f.applied = append(f.applied, Log{Index: l.Index, Term: l.Term, Data: append([]byte(nil), l.Data...)})
++	return nil
++}
++
++func (f *recordingFSM) Snapshot() (FSMSnapshot, error) { return &MockSnapshot{}, nil }
++
++func (f *recordingFSM) Restore(rc io.ReadCloser) error {
++	_, _ = io.Copy(io.Discard, rc)
++	return rc.Close()
++}
++
++func (f *recordingFSM) logs() []Log {
++	f.mu.Lock()
++	defer f.mu.Unlock()
++	return append([]Log(nil), f.applied...)
++}
++
++// waitApplied waits until the FSM has applied the command at index.
++func (f *recordingFSM) waitApplied(t *testing.T, index uint64) {
++	t.Helper()
++	deadline := time.Now().Add(5 * time.Second)
++	for time.Now().Before(deadline) {
++		for _, l := range f.logs() {
++			if l.Index == index {
++				return
++			}
++		}
++		time.Sleep(5 * time.Millisecond)
++	}
++	t.Fatalf("FSM did not apply index %d; applied %v", index, f.logs())
++}
++
++// testFollower is a single Raft node "f" whose log is set up by the test,
++// and a transport for a fake leader "l" that sends it hand-built RPCs.
++type testFollower struct {
++	r      *Raft
++	store  LogStore
++	fsm    *recordingFSM
++	leader *InmemTransport
++}
++
++// newTestFollower starts node "f" with the given log and current term. The
++// configuration has three voters (f, l, g); timeouts are long so that f stays
++// a follower for the duration of the test.
++func newTestFollower(t *testing.T, term uint64, entries ...*Log) *testFollower {
++	t.Helper()
++	logs := append([]*Log{{Index: 1, Term: 1, Type: LogConfiguration, Data: EncodeConfiguration(testFollowerConf)}}, entries...)
++	return newTestFollowerOn(t, NewInmemStore(), term, logs...)
++}
++
++// testFollowerConf is the configuration newTestFollower stores at index 1.
++var testFollowerConf = Configuration{Servers: []Server{
++	{Suffrage: Voter, ID: "f", Address: "f"},
++	{Suffrage: Voter, ID: "l", Address: "l"},
++	{Suffrage: Voter, ID: "g", Address: "g"},
++}}
++
++// newTestFollowerOn starts node "f" on the given log store holding exactly
++// logs, with the given current term.
++func newTestFollowerOn(t *testing.T, store LogStore, term uint64, logs ...*Log) *testFollower {
++	t.Helper()
++	if len(logs) > 0 {
++		require.NoError(t, store.StoreLogs(logs))
++	}
++	stable := NewInmemStore()
++	require.NoError(t, stable.SetUint64(keyCurrentTerm, term))
++
++	_, fTrans := NewInmemTransport("f")
++	_, lTrans := NewInmemTransport("l")
++	lTrans.Connect("f", fTrans)
++	fTrans.Connect("l", lTrans)
++
++	cfg := inmemConfig(t)
++	cfg.LocalID = "f"
++	cfg.HeartbeatTimeout = 10 * time.Second
++	cfg.ElectionTimeout = 10 * time.Second
++	cfg.LeaderLeaseTimeout = 10 * time.Second
++	fsm := &recordingFSM{}
++	r, err := NewRaft(cfg, fsm, store, stable, NewInmemSnapshotStore(), fTrans)
++	require.NoError(t, err)
++	t.Cleanup(func() { _ = r.Shutdown().Error() })
++	return &testFollower{r: r, store: store, fsm: fsm, leader: lTrans}
++}
++
++func (f *testFollower) header() RPCHeader {
++	return RPCHeader{ProtocolVersion: ProtocolVersionMax, ID: []byte("l"), Addr: f.leader.EncodePeer("l", "l")}
++}
++
++// appendEntries sends req from the fake leader and requires it to succeed.
++func (f *testFollower) appendEntries(t *testing.T, req AppendEntriesRequest) {
++	t.Helper()
++	req.RPCHeader = f.header()
++	var resp AppendEntriesResponse
++	require.NoError(t, f.leader.AppendEntries("f", "f", &req, &resp))
++	require.True(t, resp.Success, "append rejected: %+v", resp)
++}
++
++// requireCommitted checks the follower's commit and applied indexes. Both are
++// set on the main thread before the RPC response is sent, so no wait is needed.
++func (f *testFollower) requireCommitted(t *testing.T, commit, applied uint64) {
++	t.Helper()
++	require.Equal(t, commit, f.r.getCommitIndex(), "commit index")
++	require.Equal(t, applied, f.r.getLastApplied(), "applied index")
++}
++
++func cmd(index, term uint64, data string) *Log {
++	return &Log{Index: index, Term: term, Type: LogCommand, Data: []byte(data)}
++}
+

@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +17,7 @@ import (
 func TestControlBoundaryRejectsMissingAuthStampsAndWrongCluster(t *testing.T) {
 	nodes, _ := testCluster(t, 1)
 	n := nodes[0]
-	valid := envelope{Version: 1, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation,
+	valid := envelope{Version: 2, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation,
 		RequestID: attemptID, Lamport: 8, Kind: "control", Body: json.RawMessage(`{"operation":"status"}`)}
 	cases := []struct {
 		name   string
@@ -28,7 +31,8 @@ func TestControlBoundaryRejectsMissingAuthStampsAndWrongCluster(t *testing.T) {
 		{"no logical time", func(e *envelope) { e.Lamport = 0 }, testToken, 400},
 		{"no incarnation", func(e *envelope) { e.Incarnation = "" }, testToken, 400},
 		{"no request ID", func(e *envelope) { e.RequestID = "" }, testToken, 400},
-		{"wrong version", func(e *envelope) { e.Version = 2 }, testToken, 400},
+		{"legacy unsafe helper version", func(e *envelope) { e.Version = 1 }, testToken, 400},
+		{"wrong version", func(e *envelope) { e.Version = 3 }, testToken, 400},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -57,6 +61,28 @@ func TestControlBoundaryRejectsMissingAuthStampsAndWrongCluster(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHeartbeatUsesSerializedConsensusConsumer(t *testing.T) {
+	n, err := openNode(nodeConfig{Cluster: clusterID, ID: runtimeID, Address: "127.0.0.1:0", DataDir: filepath.Join(t.TempDir(), "state"), New: true, Token: testToken, Output: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.close()
+	var bypass atomic.Int64
+	n.transport.SetHeartbeatHandler(func(rpc raft.RPC) {
+		bypass.Add(1)
+		rpc.Respond(&raft.AppendEntriesResponse{Term: 1, Success: true}, nil)
+	})
+	sender := newTransport(&wire{cluster: clusterID, id: meetingID, incarnation: incarnation, token: testToken}, "127.0.0.1:7901")
+	defer sender.Close()
+	var response raft.AppendEntriesResponse
+	if err := sender.AppendEntries(raft.ServerID(runtimeID), raft.ServerAddress(n.address), &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ProtocolVersion: raft.ProtocolVersionMax, ID: []byte(meetingID), Addr: []byte("127.0.0.1:7901")}, Term: 1}, &response); err != nil {
+		t.Fatal(err)
+	}
+	if bypass.Load() != 0 || n.raft.CurrentTerm() != 1 {
+		t.Fatal("heartbeat bypassed the serialized state transition", bypass.Load(), n.raft.CurrentTerm())
 	}
 }
 

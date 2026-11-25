@@ -37,7 +37,7 @@ func TestMalformedRaftRPCNeverReachesLibraryPanics(t *testing.T) {
 			kind = "raft.snapshot"
 		}
 		body, _ := json.Marshal(value)
-		e := envelope{Version: 1, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation, RequestID: newUUID(), Lamport: 42, Kind: kind, Body: body}
+		e := envelope{Version: 2, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation, RequestID: newUUID(), Lamport: 42, Kind: kind, Body: body}
 		b, _ := json.Marshal(e)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		req, _ := http.NewRequestWithContext(ctx, "POST", "http://"+n.address+"/v1/raft", bytes.NewReader(append(b, '\n')))
@@ -147,7 +147,7 @@ func TestDurableCausalityAdvancesWireBeforeSend(t *testing.T) {
 
 func TestWireRejectsClockExhaustionWithoutPoisoningClock(t *testing.T) {
 	w := &wire{cluster: clusterID, id: runtimeID, incarnation: incarnation}
-	e := envelope{Version: 1, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation, RequestID: attemptID, Lamport: maxSafeInteger - 1, Kind: "control", Body: json.RawMessage("null")}
+	e := envelope{Version: 2, ClusterID: clusterID, NodeID: meetingID, Incarnation: incarnation, RequestID: attemptID, Lamport: maxSafeInteger - 1, Kind: "control", Body: json.RawMessage("null")}
 	if err := w.accept(e, "control"); err == nil {
 		t.Fatal("near-limit clock poisoned future sends")
 	}

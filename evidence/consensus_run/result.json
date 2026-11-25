@@ -1,0 +1,146 @@
+{
+  "observedAt": "2026-11-25T19:06:09.114Z",
+  "branch": "milestone-5",
+  "baseCommit": "e2ed435",
+  "dependency": {
+    "module": "github.com/hashicorp/raft",
+    "base": "v1.8.0",
+    "baseCommit": "0f543c056e7e577a54b819a62116335c9661a13a",
+    "moduleChecksum": "h1:YbfecBcuTar/LNFEDfVTpqu9Aw+MczTk7MYczvy+62k=",
+    "localReplace": "third_party/hashicorp-raft",
+    "originalFilesVerified": 69,
+    "productionFiles": [
+      {
+        "file": "api.go",
+        "sha256": "aa6cf35b0516a1fb98619831ae779e9eda4e8b48805a5262eddcc2b197178563"
+      },
+      {
+        "file": "future.go",
+        "sha256": "63d7b8c9aa3a9eda4aa53ae0822adf2001be8cdb717901fa3f2978a2f21b0493"
+      },
+      {
+        "file": "raft.go",
+        "sha256": "c1ca11f74c10dce11309b6e948c10bef32b4f414d755c3e917b3f93fee32de25"
+      },
+      {
+        "file": "snapshot.go",
+        "sha256": "779f5b1ecfe5d99d834a94a9c914cfe331c92ffb3aeaf79307b5d604e1f27f33"
+      },
+      {
+        "file": "state.go",
+        "sha256": "e44e5886180844f0c7f368719384480eedbfd16831b01b9827207d49109b1f9b"
+      }
+    ],
+    "productionPatchSha256": "87e3f292e9f5bc6140a3e835ba24cfc807debf207b42daf820a68482361f7d24"
+  },
+  "commands": [
+    {
+      "command": "npm run test:consensus",
+      "exitCode": 0,
+      "includes": [
+        "complete fork suite -race -count=1 (131.883s)",
+        "complete helper suite -race -count=1 (13.609s)",
+        "Go vet",
+        "helper build",
+        "five independent processes (3.625s)"
+      ]
+    },
+    {
+      "command": "npm test",
+      "exitCode": 0,
+      "tests": 62,
+      "passed": 62,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:coordinator",
+      "exitCode": 0,
+      "includes": [
+        "local dependency safety regressions",
+        "complete helper suite",
+        "Go vet",
+        "helper build",
+        "five independent processes"
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "test": "TestRaftSafetyCommitOnlyAppendDoesNotApplyDivergentSuffix",
+      "releasedDependency": "FAIL (observed)",
+      "localDependency": "PASS"
+    },
+    {
+      "test": "TestRaftSafetySnapshotDiscardsConflictingBoundary",
+      "releasedDependency": "FAIL (observed)",
+      "localDependency": "PASS"
+    },
+    {
+      "test": "TestRaftSafetySnapshotDiscardsDivergentEntriesBelowSnapshot",
+      "releasedDependency": "FAIL (observed)",
+      "localDependency": "PASS"
+    },
+    {
+      "test": "TestSnapshotPublicationCrashRecovery",
+      "stages": [
+        "before-publish",
+        "after-publish"
+      ],
+      "realBoltAndFileSnapshots": true,
+      "realProcessKill": true,
+      "releasedDependency": "after-publish FAIL (observed)",
+      "localDependency": "both PASS"
+    },
+    {
+      "test": "TestFiveVoterPartitionHealsWithoutMinorityOutcomes",
+      "voters": 5,
+      "split": [
+        2,
+        3
+      ],
+      "transport": "source-specific TCP proxies; five helper instances in one Go process",
+      "minorityProposalDurableButUnacknowledged": true,
+      "majorityMeetings": 41,
+      "minorityOutcomeAbsentAfterHealAndRestart": true,
+      "finalVoters": 4,
+      "finalQuorum": 3,
+      "result": "PASS"
+    },
+    {
+      "test": "TestLocalFailedMembershipWriteCannotChangeQuorum",
+      "beforeFix": "FAIL (observed phantom 3-voter configuration after failed 4-voter removal)",
+      "afterFix": "PASS; quorum/replicators preserved and synchronous shutdown"
+    },
+    {
+      "test": "five helper process scenario",
+      "result": "PASS",
+      "snapshotInstalled": true,
+      "minorityRejected": true,
+      "retainedAfterFullRestart": true
+    }
+  ],
+  "compatibility": {
+    "storageVersion": 2,
+    "envelopeVersion": 2,
+    "legacyHistoryAutomaticallyRepaired": false
+  },
+  "liveRaftSqlActivationImplemented": false,
+  "limits": [
+    "Finite regression/failure evidence, not a formal consensus proof",
+    "Intact synchronous Bolt storage and helper default automatic FSM restore configuration",
+    "No certification of arbitrary stores/options, Byzantine nodes, corruption or power-loss durability",
+    "Participant/media ownership activation remains a separate unimplemented protocol",
+    "PostgreSQL/SFU remain single availability dependencies"
+  ],
+  "provenance": {
+    "all69StagedSourceFilesMatchWorkingBytes": true,
+    "productionPatchAppliesCleanly": true,
+    "productionPatchReproducesBytes": true,
+    "localDocumentLinksChecked": 34
+  }
+}

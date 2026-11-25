@@ -25,6 +25,7 @@ type nodeConfig struct {
 	Bootstrap                            []raft.Server
 	Listener                             net.Listener
 	Output                               io.Writer
+	Routes                               map[string]string
 }
 
 type identity struct {
@@ -35,6 +36,10 @@ type identity struct {
 	Bootstrapped bool   `json:"bootstrapped"`
 	StoreID      string `json:"storeId"`
 }
+
+// Histories produced by the old dependency may already contain incorrectly
+// applied outcomes. Keep them for inspection; never silently trust them again.
+const coordinatorStorageVersion = 2
 
 type node struct {
 	cfg       nodeConfig
@@ -56,6 +61,11 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 	if !cfg.New && len(cfg.Bootstrap) != 0 {
 		return nil, fmt.Errorf("bootstrap is allowed only during explicit new-node initialization")
 	}
+	routes, err := validateRoutes(cfg.Routes)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Routes = routes
 	listener := cfg.Listener
 	if listener == nil {
 		var err error
@@ -73,7 +83,7 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 	if !loopbackAddress(address, false) || (cfg.Address != address && !hasZeroPort(cfg.Address)) {
 		return nil, fmt.Errorf("listener/address mismatch")
 	}
-	manifest := identity{Version: 1, Cluster: cfg.Cluster, ID: cfg.ID, Address: address, Bootstrapped: len(cfg.Bootstrap) != 0, StoreID: newUUID()}
+	manifest := identity{Version: coordinatorStorageVersion, Cluster: cfg.Cluster, ID: cfg.ID, Address: address, Bootstrapped: len(cfg.Bootstrap) != 0, StoreID: newUUID()}
 	manifestPath := filepath.Join(cfg.DataDir, "identity.json")
 	storePath := filepath.Join(cfg.DataDir, "raft.db")
 	if cfg.New {
@@ -107,7 +117,11 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 			return nil, fmt.Errorf("durable identity missing; explicit replacement required: %w", err)
 		}
 		var old identity
-		if decodeStrict(b, &old) != nil || old.Version != 1 || old.Cluster != cfg.Cluster || old.ID != cfg.ID || old.Address != address || !uuidPattern.MatchString(old.StoreID) {
+		identityErr := decodeStrict(b, &old)
+		if identityErr == nil && old.Version == 1 {
+			return nil, fmt.Errorf("pre-fix coordinator history requires a fresh isolated lab; preserve the old directory for inspection")
+		}
+		if identityErr != nil || old.Version != coordinatorStorageVersion || old.Cluster != cfg.Cluster || old.ID != cfg.ID || old.Address != address || !uuidPattern.MatchString(old.StoreID) {
 			return nil, fmt.Errorf("durable identity does not match startup configuration")
 		}
 		manifest = old
@@ -140,6 +154,7 @@ func openNode(cfg nodeConfig) (_ *node, failure error) {
 	}
 	w := &wire{cluster: cfg.Cluster, id: cfg.ID, incarnation: newUUID(), token: cfg.Token, output: cfg.Output}
 	transport := newTransport(w, address)
+	transport.routes = routes
 	meta := newMetadata(cfg.Cluster)
 	meta.observeCausal = w.observe
 	availableSnapshots, err := snapshots.List()

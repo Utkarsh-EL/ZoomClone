@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; coordinator and [PostgreSQL storage foundations](../../postgresql-fencing.md) implemented on `milestone-5`. Live ownership integration is gated by [reproduced consensus safety failures](../../coordinator-foundation.md#dependency-findings-and-next-evidence). The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md) and [PostgreSQL storage foundations](../../postgresql-fencing.md) implemented on `milestone-5`. Resumable Raft-to-SQL ownership activation remains the next integration gate. The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 
@@ -31,7 +31,7 @@ This document is the current design proposal. It supersedes its earlier SQLite, 
 
 The user delegated implementation details. These proposals make the design concrete for review; they are not additional historical user decisions:
 
-- HashiCorp Raft in a Go helper paired with each TypeScript coordination peer, using durable Bolt-backed log/stable stores and file snapshots.
+- HashiCorp Raft in a Go helper paired with each TypeScript coordination peer, using durable Bolt-backed log/stable stores and file snapshots. The current implementation carries an explicitly documented local dependency repair; see the consensus checkpoint above for provenance and limits.
 - PostgreSQL ownership fencing through a locked row per meeting, shared by all command and ownership transactions.
 - A coordinator reconciliation worker that bridges committed assignment metadata to PostgreSQL fencing and runtime activation. Section 7 defines the ordering.
 - Linux containers for managed backend nodes, the SFU, and fault proxies, in addition to PostgreSQL. This extends the confirmed database-only Docker requirement to simplify lab lifecycle and real process suspension on Windows.

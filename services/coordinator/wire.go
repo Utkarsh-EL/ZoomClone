@@ -11,6 +11,7 @@ import (
 )
 
 const maxEnvelopeBytes = 1 << 20
+const wireProtocolVersion = 2
 
 type wireError struct {
 	Code    string `json:"code"`
@@ -52,7 +53,7 @@ func (w *wire) packet(kind, id string, body json.RawMessage, failure *wireError)
 		return envelope{}, fmt.Errorf("logical clock exhausted")
 	}
 	w.clock++
-	e := envelope{Version: 1, ClusterID: w.cluster, NodeID: w.id, Incarnation: w.incarnation,
+	e := envelope{Version: wireProtocolVersion, ClusterID: w.cluster, NodeID: w.id, Incarnation: w.incarnation,
 		RequestID: id, Lamport: w.clock, Kind: kind, Body: body, Error: failure}
 	w.trace("send", e)
 	return e, nil
@@ -64,9 +65,10 @@ func (w *wire) observe(stamp uint64) {
 	w.mu.Unlock()
 }
 
-// accept runs for all RPCs, including heartbeat fast paths and snapshot headers.
+// accept runs for all RPCs, including heartbeats and snapshot headers. Version
+// 2 rejects pre-fix binaries, preventing a mixed old/new consensus cluster.
 func (w *wire) accept(e envelope, kind string) error {
-	if e.Version != 1 || e.ClusterID != w.cluster || !uuidPattern.MatchString(e.NodeID) || !uuidPattern.MatchString(e.Incarnation) || !uuidPattern.MatchString(e.RequestID) || e.Lamport == 0 || e.Lamport >= maxSafeInteger || e.Kind != kind || len(e.Body) == 0 {
+	if e.Version != wireProtocolVersion || e.ClusterID != w.cluster || !uuidPattern.MatchString(e.NodeID) || !uuidPattern.MatchString(e.Incarnation) || !uuidPattern.MatchString(e.RequestID) || e.Lamport == 0 || e.Lamport >= maxSafeInteger || e.Kind != kind || len(e.Body) == 0 {
 		return fmt.Errorf("invalid protocol envelope")
 	}
 	w.mu.Lock()

@@ -1,0 +1,9 @@
+* text eol=lf
+patches/*.diff -whitespace
+# Preserve checksum-verified upstream documentation/configuration verbatim.
+.github/stale.yml -whitespace
+/.golangci-lint.yml -whitespace
+/.travis.yml -whitespace
+/LICENSE -whitespace
+/README.md -whitespace
+docs/*.md -whitespace

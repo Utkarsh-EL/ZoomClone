@@ -2,7 +2,7 @@
 
 This is the first implemented checkpoint of the [distributed meeting redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md), on `milestone-5`. The milestone-4 application and its demos still run separately. The new helper is not yet wired into `peer.ts` and does not authorize meeting access.
 
-**Safety gate:** a subsequent audit reproduced three upstream Raft log/snapshot failures. The helper remains a learning/feasibility component and must not authorize external ownership until those failures are resolved. See the audit commands below. The independent [PostgreSQL fencing checkpoint](postgresql-fencing.md) uses explicit test assignments.
+The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced upstream log/snapshot failures with a reviewed local dependency patch and always-enabled regressions. The helper still does not authorize external ownership: resumable Raft-to-SQL activation remains unimplemented. The independent [PostgreSQL fencing checkpoint](postgresql-fencing.md) uses explicit test assignments.
 
 ## Run the evidence
 
@@ -15,10 +15,11 @@ npm ci
 npm test
 npm run typecheck
 npm run test:coordinator
+npm run test:consensus
 npm run demo:coordinator
 ```
 
-`npm test` runs the existing application tests plus the TypeScript protocol boundary tests. `test:coordinator` runs the Go suite and vet, builds the helper, and runs the independent-process test. `demo:coordinator` builds the helper and runs the checked scenario, printing its result and the directory containing its logs. Go caches and binaries stay in ignored `.cache/` and `.local/` directories; scripts work from any current directory and hide Windows helper windows.
+`npm test` runs the existing application tests plus the TypeScript protocol boundary tests. `test:coordinator` runs the local dependency safety regressions, helper suite and vet, builds the helper, and runs the independent-process test. `test:consensus` runs the complete dependency and helper suites uncached with Go's race detector, then vet, build and the process test. `demo:coordinator` builds the helper and runs the checked scenario, printing its result and the directory containing its logs. Go caches and binaries stay in ignored `.cache/` and `.local/` directories; scripts work from any current directory and hide Windows helper windows.
 
 The checked scenario:
 
@@ -68,7 +69,7 @@ $env:ZOOM_CLUSTER_TOKEN = [Convert]::ToHexString([System.Security.Cryptography.R
 
 For a multi-voter bootstrap, use exactly the same complete list of initial voter IDs/addresses at every node, each with its own matching ID, port, and new directory. Bootstrap is explicit initialization, never a response to unreachability. A new directory must not already exist. A joining node starts with `--new` and no bootstrap file; it cannot create its own cluster.
 
-On normal restart, supply the same cluster UUID, node UUID, address, directory, and environment credential; omit **both** `--new` and `--bootstrap`. Missing storage or mismatched identity/address fails startup. A store UUID binds `identity.json` to a sentinel in the Bolt store; an empty valid replacement database cannot masquerade as the original store, including for a node originally admitted as a nonvoter. The persisted voting term is also required. A retained snapshot does not excuse lost voting state. Keep the entire node directory, including `identity.json`, `raft.db`, and `snapshots/`.
+On normal restart, supply the same cluster UUID, node UUID, address, directory, and environment credential; omit **both** `--new` and `--bootstrap`. Missing storage or mismatched identity/address fails startup. Storage version 2 rejects directories created by the pre-fix helper; preserve those directories and create a fresh isolated lab rather than editing their version marker. A store UUID binds `identity.json` to a sentinel in the Bolt store; an empty valid replacement database cannot masquerade as the original store, including for a node originally admitted as a nonvoter. The persisted voting term is also required. A retained snapshot does not excuse lost voting state. Keep the entire node directory, including `identity.json`, `raft.db`, and `snapshots/`.
 
 Never run two processes with the same voter identity, or use `--new` to reconstruct a lost voter's state under that identity. Directory and port checks prevent ordinary accidental reuse locally, but do not enforce uniqueness across copied directories/machines. Replacement after state loss requires quorum: remove the old voter through an agreed configuration change, initialize a new UUID/directory, add it as a nonvoter, synchronize, then promote. A minority cannot perform this recovery and must wait for enough existing voters.
 
@@ -78,11 +79,11 @@ Never run two processes with the same voter identity, or use `--new` to reconstr
 
 Membership requests require `nodeId`, `expectedIndex`, and, for admission/promotion, `address`. Fetch an authoritative `configuration`, then pass its index. A stale index fails. Adding always starts as a nonvoter; promotion checks its applied index against the leader's committed watermark. Membership response loss requires inspecting the configuration before issuing a refreshed operation, rather than blindly repeating admission/removal.
 
-The helper uses `/v1/control` and `/v1/raft`, authenticated with the cluster bearer credential. Both accept a bounded, newline-terminated JSON envelope containing version, cluster/node/incarnation, request ID, Lamport time, kind, and body. Snapshot requests append a bounded raw stream to that stamped header; the stamped response records completion. Replies are correlated and size-limited. Heartbeats use the same route and checks. The adapter rejects malformed RPC entries and configuration encodings before dispatch to library goroutines, and binds library sender identity to the envelope. Credentials and command bodies are excluded from trace records.
+The helper uses `/v1/control` and `/v1/raft`, authenticated with the cluster bearer credential. Both accept a bounded, newline-terminated JSON envelope containing version, cluster/node/incarnation, request ID, Lamport time, kind, and body. Envelope version 2 rejects legacy helpers/clients independently of the HTTP operation paths and native Raft snapshot format. Snapshot requests append a bounded raw stream to that stamped header; the stamped response records completion. Replies are correlated and size-limited. Heartbeats use the same route and checks. The adapter rejects malformed RPC entries and configuration encodings before dispatch to library goroutines, and binds library sender identity to the envelope. Credentials and command bodies are excluded from trace records.
 
 Before election goroutines start, the helper advances its clock from durable log stamps and restored snapshot state. Replayed commands advance the same clock. Snapshot-covered gaps are valid after catch-up; gaps outside a snapshot are startup failures. Checked clock arithmetic rejects near-exhaustion timestamps without advancing the clock, and exhausted sends fail explicitly rather than emitting an invalid stamp.
 
-The helper deliberately returns `ErrPipelineReplicationNotSupported`; HashiCorp Raft falls back to regular AppendEntries. This trades throughput for one transport path to validate. Consensus remains the library implementation. Loopback-only plaintext HTTP is the current deployment boundary. Authenticated LAN transport/TLS, source-specific fault proxies, and container packaging are later checkpoints.
+The helper deliberately returns `ErrPipelineReplicationNotSupported`; HashiCorp Raft falls back to regular AppendEntries. The optional heartbeat fast path is also omitted so every RPC reaches the serialized consumer. The local dependency repair is documented separately. Loopback-only plaintext HTTP is the current deployment boundary. `--routes <json-file>` accepts an immutable mapping from logical loopback peer addresses to loopback fault-proxy endpoints for this source node. It covers consensus and peer-control requests without changing logical identities. LAN transport/TLS, container packaging and complete whole-system fault routing are later checkpoints.
 
 Control requests have a 32-request concurrency bound, three-second operation context, and bounded HTTP reads/writes. Envelopes are limited to 1 MiB and snapshots to 32 MiB. A response exceeding the envelope bound fails explicitly; no pagination/retention system is claimed. Per-meeting payloads, resume credentials, and media do not belong in this metadata service.
 
@@ -92,24 +93,22 @@ The pinned Raft version's `GetConfiguration().Index()` returns zero. The adapter
 
 Authoritative reads use a newly committed barrier rather than treating leader status or nonvoter reachability as proof of authority. The library also has [an open VerifyLeader/nonvoter report](https://github.com/hashicorp/raft/issues/725); this code does not rely on that optimization.
 
-**Subsequent safety audit: the pinned Raft dependency is blocked for ownership integration.** Three new regressions in `services/coordinator/safety_test.go` reproduce uncommitted metadata application ([#733](https://github.com/hashicorp/raft/issues/733)), rejection of valid post-snapshot appends ([#697](https://github.com/hashicorp/raft/issues/697)), and retention of divergent commands below a snapshot ([#721](https://github.com/hashicorp/raft/issues/721)). The tests use authenticated helper HTTP, its real FSM and Bolt store, with constructed partition-boundary histories. They do not claim to run a live partition/election. Barrier reads and disabled pipelining do not fix these bugs.
+The original dependency audit reproduced uncommitted metadata application ([#733](https://github.com/hashicorp/raft/issues/733)), rejection of valid post-snapshot appends ([#697](https://github.com/hashicorp/raft/issues/697)), and retention of divergent commands below a snapshot ([#721](https://github.com/hashicorp/raft/issues/721)). Those three regressions in `services/coordinator/safety_test.go` now pass unconditionally against the local repaired dependency. They use authenticated helper HTTP, its real FSM and Bolt store, with constructed partition-boundary histories.
 
-Run the explicit known-failing audit in PowerShell:
+Run just those regressions in PowerShell:
 
 ```powershell
 $env:GOPATH = Join-Path (Get-Location) '.cache/go'
 $env:GOCACHE = Join-Path (Get-Location) '.cache/go-build'
-$env:ZOOM_RAFT_SAFETY_AUDIT = '1'
 go -C services/coordinator test -run '^TestRaftSafety' -count=1 -v
-Remove-Item Env:\ZOOM_RAFT_SAFETY_AUDIT
 ```
 
-All three currently fail their safety assertions (exit 1). The ordinary suite explicitly skips these opt-in reproductions; that green suite does not establish consensus safety. Proposed upstream fixes [#734](https://github.com/hashicorp/raft/pull/734) and [#735](https://github.com/hashicorp/raft/pull/735) were still unmerged at audit time. No safe upgrade has been selected. Do not activate external database/media ownership using this dependency until a reviewed replacement or fixed version passes these and live partition/recovery tests. Independent PostgreSQL fencing tests use explicit test assignments only.
+No audit environment flag is needed. `test:coordinator` and `test:consensus` also run a live five-voter TCP partition/heal/snapshot/restart scenario and real-process crashes at the durable snapshot publication boundary. Proposed upstream fixes [#734](https://github.com/hashicorp/raft/pull/734) and [#735](https://github.com/hashicorp/raft/pull/735) informed the patch; local crash/error/configuration corrections were necessary. See [provenance and failure evidence](consensus-safety.md). These checks do not constitute a consensus proof or certify arbitrary library configurations.
 
-PostgreSQL fence/command races and stalled transaction timeout evidence are now implemented in the [storage checkpoint](postgresql-fencing.md). Resolve consensus safety, then prove resumable Raft-to-SQL activation before connecting participant or media controls. Preserve the SQL cutover rule and the separate media cutover; a successful assignment in this demo does not implement either one.
+PostgreSQL fence/command races and stalled transaction timeout evidence are implemented in the [storage checkpoint](postgresql-fencing.md). Next prove resumable Raft-to-SQL activation before connecting participant or media controls. Preserve the SQL cutover rule and the separate media cutover; a successful assignment in this demo does not implement either one.
 
 ## Review and verification record
 
 An independent read-only reviewer identified malformed-RPC panic exposure, acceptance of an empty replacement store for a promoted joiner, and missing restoration of the process clock from durable timestamps. Each has a regression that failed before its fix. Near-limit clock arithmetic was also fixed and tested in both languages. The process test caught stdout backpressure in the runner; startup now leaves the log pipe draining.
 
-Final checks for this batch: 57 Node tests; 19 Go test functions with additional subcases; Go vet; Go race detector; TypeScript typecheck; five-process integration test; and the standalone demo. The integration and demo both verify full-process restart and snapshot transfer. No browser/media, PostgreSQL, LAN, or container acceptance is claimed.
+The original foundation batch passed 57 Node tests, 19 Go test functions with additional subcases, vet/race checks, TypeScript checks, five-process integration and the standalone demo. Current consensus verification is recorded separately in the [repair checkpoint](consensus-safety.md). Neither checkpoint claims browser/media, LAN or whole-application acceptance.

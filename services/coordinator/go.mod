@@ -2,6 +2,8 @@ module zoomclone/coordinator
 
 go 1.26.0
 
+replace github.com/hashicorp/raft => ../../third_party/hashicorp-raft
+
 require (
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/raft v1.8.0

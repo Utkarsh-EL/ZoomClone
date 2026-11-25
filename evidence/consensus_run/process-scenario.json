@@ -1,0 +1,79 @@
+{
+  "root": "C:\\Users\\ckand\\Documents\\VS Code Projects\\ZoomClone\\.local\\coordinator-labs\\dc0a8afe-a393-4d25-9b4c-1a5bfb177e32",
+  "initialLeader": "fd6b1462-c15b-4049-8bff-a5f06f076be8",
+  "replacementLeader": "0b335ad5-ed67-4ba6-a667-60e378012d18",
+  "initialIncarnation": "021eb4ad-965b-4e23-86b5-c6c25e131a4c",
+  "restartedIncarnation": "ea1d1de0-878c-45f9-bc8d-1d740043af59",
+  "stableOutcome": {
+    "code": "OK",
+    "id": "7c35bb29-1141-4991-8e61-fe8f4a3e7385",
+    "index": 4
+  },
+  "assignmentGeneration": 1,
+  "snapshotInstalled": true,
+  "voters": 5,
+  "quorum": 3,
+  "minorityRejected": true,
+  "retainedAfterFullRestart": true,
+  "effectiveMeetingOwnershipImplemented": false,
+  "events": [
+    {
+      "stage": "leader-ready",
+      "time": "2026-11-25T19:04:50.980Z",
+      "elapsedMs": 395,
+      "nodeId": "fd6b1462-c15b-4049-8bff-a5f06f076be8"
+    },
+    {
+      "stage": "metadata-committed",
+      "time": "2026-11-25T19:04:50.997Z",
+      "elapsedMs": 410
+    },
+    {
+      "stage": "leader-killed",
+      "time": "2026-11-25T19:04:51.002Z",
+      "elapsedMs": 414,
+      "nodeId": "fd6b1462-c15b-4049-8bff-a5f06f076be8"
+    },
+    {
+      "stage": "replacement-ready",
+      "time": "2026-11-25T19:04:52.062Z",
+      "elapsedMs": 1475,
+      "nodeId": "0b335ad5-ed67-4ba6-a667-60e378012d18"
+    },
+    {
+      "stage": "snapshot-forced",
+      "time": "2026-11-25T19:04:52.275Z",
+      "elapsedMs": 1688,
+      "nodeId": "0b335ad5-ed67-4ba6-a667-60e378012d18"
+    },
+    {
+      "stage": "old-voter-restarted-and-caught-up",
+      "time": "2026-11-25T19:04:52.415Z",
+      "elapsedMs": 1828,
+      "nodeId": "fd6b1462-c15b-4049-8bff-a5f06f076be8"
+    },
+    {
+      "stage": "three-voters-held-down",
+      "time": "2026-11-25T19:04:52.422Z",
+      "elapsedMs": 1835
+    },
+    {
+      "stage": "minority-refused-authoritative-read",
+      "time": "2026-11-25T19:04:52.428Z",
+      "elapsedMs": 1841,
+      "nodeId": "6fe16026-183b-4d6e-868d-305bdf68ce3c"
+    },
+    {
+      "stage": "quorum-restored",
+      "time": "2026-11-25T19:04:53.080Z",
+      "elapsedMs": 2493,
+      "nodeId": "af37eeba-038b-493c-9221-a70a10341872"
+    },
+    {
+      "stage": "all-processes-restarted-with-retained-metadata",
+      "time": "2026-11-25T19:04:53.751Z",
+      "elapsedMs": 3164,
+      "nodeId": "6fe16026-183b-4d6e-868d-305bdf68ce3c"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ export interface Identity {
 }
 
 export interface Envelope extends Identity {
-  version: 1;
+  version: 2;
   requestId: string;
   lamport: number;
   kind: string;
@@ -42,11 +42,11 @@ export class ControlWire {
 
   request(body: unknown): Envelope {
     if (this.clock.time >= Number.MAX_SAFE_INTEGER - 1) throw new ProtocolError("Logical clock exhausted");
-    return { version: 1, ...this.identity, requestId: randomUUID(), lamport: this.clock.tick(), kind: "control", body };
+    return { version: 2, ...this.identity, requestId: randomUUID(), lamport: this.clock.tick(), kind: "control", body };
   }
 
   receive(value: unknown, requestId: string, helperId: string): Envelope {
-    if (!record(value) || value.version !== 1 || value.clusterId !== this.identity.clusterId || value.nodeId !== helperId
+    if (!record(value) || value.version !== 2 || value.clusterId !== this.identity.clusterId || value.nodeId !== helperId
       || typeof value.incarnation !== "string" || !UUID_PATTERN.test(value.incarnation)
       || value.requestId !== requestId || value.kind !== "control.reply" || !("body" in value)
       || !Number.isSafeInteger(value.lamport) || (value.lamport as number) <= 0 || (value.lamport as number) >= Number.MAX_SAFE_INTEGER - 2) {

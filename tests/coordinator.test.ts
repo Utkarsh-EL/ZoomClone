@@ -19,7 +19,7 @@ test("helper client correlates replies, observes remote clocks and preserves com
     for await (const chunk of req) chunks.push(chunk);
     const packet = JSON.parse(Buffer.concat(chunks).toString());
     received.push(packet);
-    const reply = mutate({ version: 1, clusterId, nodeId: helperId, incarnation: randomUUID(),
+    const reply = mutate({ version: 2, clusterId, nodeId: helperId, incarnation: randomUUID(),
       requestId: packet.requestId, lamport: 80, kind: "control.reply", body: { code: "OK" } });
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(reply) + "\n");
@@ -37,14 +37,14 @@ test("helper client correlates replies, observes remote clocks and preserves com
   assert.equal(received[0].body.command.id, received[1].body.command.id);
   assert.notEqual(received[0].requestId, received[1].requestId);
   assert.ok(received[1].lamport > 80);
-  assert.equal(received[0].version, 1);
+  assert.equal(received[0].version, 2);
   assert.equal(received[0].incarnation, received[1].incarnation);
 
   for (const field of ["clusterId", "nodeId", "requestId", "version", "lamport", "incarnation", "kind"]) {
     mutate = (reply) => { delete reply[field]; return reply; };
     await assert.rejects(client.call("status"), ProtocolError, `missing ${field} accepted`);
   }
-  for (const change of [{ requestId: randomUUID() }, { nodeId: randomUUID() }, { clusterId: randomUUID() },
+  for (const change of [{ version: 1 }, { requestId: randomUUID() }, { nodeId: randomUUID() }, { clusterId: randomUUID() },
     { lamport: -1 }, { lamport: 1.1 }, { lamport: 0 }, { lamport: Number.MAX_SAFE_INTEGER + 1 },
     { lamport: Number.MAX_SAFE_INTEGER - 1 }, { kind: "raft.append.reply" }]) {
     mutate = (reply) => ({ ...reply, ...change });

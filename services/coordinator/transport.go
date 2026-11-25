@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -21,12 +20,22 @@ import (
 // Pipelining is deliberately unsupported: the library uses bounded sequential
 // AppendEntries instead, so no alternate route can omit stamps/authentication.
 type httpTransport struct {
-	wire      *wire
-	address   string
-	consumer  chan raft.RPC
-	client    *http.Client
-	mu        sync.RWMutex
-	heartbeat func(raft.RPC)
+	wire     *wire
+	address  string
+	consumer chan raft.RPC
+	client   *http.Client
+	routes   map[string]string
+}
+
+func validateRoutes(input map[string]string) (map[string]string, error) {
+	routes := make(map[string]string, len(input))
+	for logical, endpoint := range input {
+		if !loopbackAddress(logical, false) || !loopbackAddress(endpoint, false) {
+			return nil, fmt.Errorf("route endpoints must be literal loopback addresses")
+		}
+		routes[logical] = endpoint
+	}
+	return routes, nil
 }
 
 func newTransport(w *wire, address string) *httpTransport {
@@ -55,11 +64,10 @@ func (t *httpTransport) AppendEntriesPipeline(raft.ServerID, raft.ServerAddress)
 	return nil, raft.ErrPipelineReplicationNotSupported
 }
 func (t *httpTransport) Close() error { t.client.CloseIdleConnections(); return nil }
-func (t *httpTransport) SetHeartbeatHandler(f func(raft.RPC)) {
-	t.mu.Lock()
-	t.heartbeat = f
-	t.mu.Unlock()
-}
+
+// Optional fast-path dispatch is intentionally unused. Heartbeats share the
+// consumer with votes, appends and snapshots, keeping state changes serialized.
+func (t *httpTransport) SetHeartbeatHandler(func(raft.RPC)) {}
 
 func (t *httpTransport) exchange(ctx context.Context, id raft.ServerID, address raft.ServerAddress, kind string, args, response any, data io.Reader) error {
 	if !loopbackAddress(string(address), false) {
@@ -88,7 +96,11 @@ func (t *httpTransport) exchange(ctx context.Context, id raft.ServerID, address 
 	if kind == "control" {
 		path = "/v1/control"
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://"+string(address)+path, source)
+	endpoint := string(address)
+	if route, ok := t.routes[endpoint]; ok {
+		endpoint = route
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://"+endpoint+path, source)
 	if err != nil {
 		return err
 	}
@@ -228,17 +240,10 @@ func (t *httpTransport) serveRaft(w http.ResponseWriter, r *http.Request, e enve
 		http.Error(w, "trailing request bytes", http.StatusBadRequest)
 		return
 	}
-	t.mu.RLock()
-	heartbeat := t.heartbeat
-	t.mu.RUnlock()
-	if a, ok := command.(*raft.AppendEntriesRequest); ok && a.Term != 0 && len(a.Entries) == 0 && a.PrevLogEntry == 0 && a.PrevLogTerm == 0 && a.LeaderCommitIndex == 0 && heartbeat != nil {
-		heartbeat(rpc)
-	} else {
-		select {
-		case t.consumer <- rpc:
-		case <-r.Context().Done():
-			return
-		}
+	select {
+	case t.consumer <- rpc:
+	case <-r.Context().Done():
+		return
 	}
 	select {
 	case result := <-responses:

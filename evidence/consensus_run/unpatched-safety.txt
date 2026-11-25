@@ -1,0 +1,12 @@
+=== RUN   TestRaftSafetyCommitOnlyAppendDoesNotApplyDivergentSuffix
+    safety_test.go:100: uncommitted old-leader reservation reached metadata FSM and survived log correction: {Code:OK ID:00000000-0000-4000-8000-000000000002 Index:2 Generation:0 Revision:0}
+--- FAIL: TestRaftSafetyCommitOnlyAppendDoesNotApplyDivergentSuffix (0.03s)
+=== RUN   TestRaftSafetySnapshotDiscardsConflictingBoundary
+    safety_test.go:139: valid append after installed snapshot rejected: conflicting boundary survived snapshot installation
+--- FAIL: TestRaftSafetySnapshotDiscardsConflictingBoundary (0.03s)
+=== RUN   TestRaftSafetySnapshotDiscardsDivergentEntriesBelowSnapshot
+    safety_test.go:156: snapshot retained never-committed divergent command below its boundary: index=2 term=2 data={"id":"00000000-0000-4000-8000-000000000002","kind":"reserve","meetingId":"00000000-0000-4000-8000-000000000002","code":"never-committed"}
+--- FAIL: TestRaftSafetySnapshotDiscardsDivergentEntriesBelowSnapshot (0.03s)
+FAIL
+exit status 1
+FAIL	zoomclone/coordinator	0.316s

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -24,9 +23,6 @@ type safetyFollower struct {
 
 func newSafetyFollower(t *testing.T) *safetyFollower {
 	t.Helper()
-	if os.Getenv("ZOOM_RAFT_SAFETY_AUDIT") != "1" {
-		t.Skip("known-failing Raft v1.8.0 safety audit (#733/#721/#697); set ZOOM_RAFT_SAFETY_AUDIT=1 and run go test -run '^TestRaftSafety' -v to reproduce; skipped coverage does not establish safety")
-	}
 	n, err := openNode(nodeConfig{Cluster: clusterID, ID: "10000000-0000-4000-8000-000000000003",
 		Address: "127.0.0.1:0", DataDir: filepath.Join(t.TempDir(), "state"),
 		New: true, Token: testToken, Output: io.Discard})

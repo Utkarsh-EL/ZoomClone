@@ -1,0 +1,14 @@
+npm notice run test:consensus
+npm notice run node scripts/coordinator-build.ts --consensus
+ok  	github.com/hashicorp/raft	131.883s
+?   	github.com/hashicorp/raft/bench	[no test files]
+ok  	zoomclone/coordinator	13.609s
+✔ five helper processes retain metadata through leader crash, snapshot catch-up and quorum restoration (3624.8932ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3773.7044

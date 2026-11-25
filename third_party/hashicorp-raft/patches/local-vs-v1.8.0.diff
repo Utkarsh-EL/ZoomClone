@@ -1,0 +1,432 @@
+diff --git a/api.go b/api.go
+index 7df7cd2..e64cb1d 100644
+--- a/api.go
++++ b/api.go
+@@ -152,6 +152,10 @@ type Raft struct {
+ 	// LogStore provides durable storage for logs
+ 	logs LogStore
+ 
++	// Serializes snapshot preparation with background log compaction. Both use
++	// multiple LogStore calls whose combined view must remain coherent.
++	logCompactionMu sync.Mutex
++
+ 	// Used to request the leader to make configuration changes.
+ 	configurationChangeCh chan *configurationChangeFuture
+ 
+@@ -167,9 +171,10 @@ type Raft struct {
+ 	rpcCh <-chan RPC
+ 
+ 	// Shutdown channel to exit, protected to prevent concurrent exits
+-	shutdown     bool
+-	shutdownCh   chan struct{}
+-	shutdownLock sync.Mutex
++	shutdown          bool
++	shutdownCh        chan struct{}
++	shutdownLock      sync.Mutex
++	shutdownCloseOnce sync.Once
+ 
+ 	// snapshots is used to store and retrieve snapshots
+ 	snapshots SnapshotStore
+@@ -602,6 +607,12 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
+ 	if err := r.restoreSnapshot(); err != nil {
+ 		return nil, err
+ 	}
++	if index, _ := r.getLastSnapshot(); index > 0 {
++		lastLog, err = r.reconcileSnapshotLogs()
++		if err != nil {
++			return nil, fmt.Errorf("failed snapshot/log startup reconciliation: %w", err)
++		}
++	}
+ 
+ 	if err := r.restoreFromCommittedLogs(); err != nil {
+ 		return nil, err
+@@ -1068,8 +1079,9 @@ func (r *Raft) Shutdown() Future {
+ 		return &shutdownFuture{r}
+ 	}
+ 
+-	// avoid closing transport twice
+-	return &shutdownFuture{nil}
++	// A storage error may already have initiated shutdown. Every caller must
++	// still be able to join the routines before closing owned durable stores.
++	return &shutdownFuture{r}
+ }
+ 
+ // Snapshot is used to manually force Raft to take a snapshot. Returns a future
+diff --git a/future.go b/future.go
+index 1d2821b..6c98cb7 100644
+--- a/future.go
++++ b/future.go
+@@ -173,9 +173,11 @@ func (s *shutdownFuture) Error() error {
+ 		return nil
+ 	}
+ 	s.raft.waitShutdown()
+-	if closeable, ok := s.raft.trans.(WithClose); ok {
+-		_ = closeable.Close()
+-	}
++	s.raft.shutdownCloseOnce.Do(func() {
++		if closeable, ok := s.raft.trans.(WithClose); ok {
++			_ = closeable.Close()
++		}
++	})
+ 	return nil
+ }
+ 
+diff --git a/raft.go b/raft.go
+index 6e7a04b..4dcd44b 100644
+--- a/raft.go
++++ b/raft.go
+@@ -1233,7 +1233,10 @@ func (r *Raft) appendConfigurationEntry(future *configurationChangeFuture) {
+ 		}
+ 	}
+ 
+-	r.dispatchLogs([]*logFuture{&future.logFuture})
++	if !r.dispatchLogs([]*logFuture{&future.logFuture}) {
++		// Membership must never get ahead of its durable configuration entry.
++		return
++	}
+ 	index := future.Index()
+ 	r.setLatestConfiguration(configuration, index)
+ 	r.leaderState.commitment.setConfiguration(configuration)
+@@ -1242,7 +1245,7 @@ func (r *Raft) appendConfigurationEntry(future *configurationChangeFuture) {
+ 
+ // dispatchLog is called on the leader to push a log to disk, mark it
+ // as inflight and begin replication of it.
+-func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
++func (r *Raft) dispatchLogs(applyLogs []*logFuture) bool {
+ 	now := time.Now()
+ 	defer metrics.MeasureSince([]string{"raft", "leader", "dispatchLog"}, now)
+ 
+@@ -1269,11 +1272,13 @@ func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
+ 	// Write the log entry locally
+ 	if err := r.logs.StoreLogs(logs); err != nil {
+ 		r.logger.Error("failed to commit logs", "error", err)
++		// A failed write may have an uncertain durable outcome. Stop before
++		// another election or configuration change can use that uncertainty.
++		r.Shutdown()
+ 		for _, applyLog := range applyLogs {
+ 			applyLog.respond(err)
+ 		}
+-		r.setState(Follower)
+-		return
++		return false
+ 	}
+ 	r.leaderState.commitment.match(r.localID, lastIndex)
+ 
+@@ -1284,6 +1289,7 @@ func (r *Raft) dispatchLogs(applyLogs []*logFuture) {
+ 	for _, f := range r.leaderState.replState {
+ 		asyncNotifyCh(f.triggerCh)
+ 	}
++	return true
+ }
+ 
+ // processLogs is used to apply all the committed entries that haven't been
+@@ -1585,16 +1591,22 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
+ 		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "storeLogs"}, start)
+ 	}
+ 
+-	// Update the commit index
++	// Update the commit index. Only the entries this request covers (up to
++	// PrevLogEntry plus the new entries) are known to match the leader's log,
++	// so the commit index is capped there, not at our own last index: a stale
++	// tail beyond it may never have been committed. The commit index never
++	// moves backwards.
+ 	if a.LeaderCommitIndex > 0 && a.LeaderCommitIndex > r.getCommitIndex() {
+-		start := time.Now()
+-		idx := min(a.LeaderCommitIndex, r.getLastIndex())
+-		r.setCommitIndex(idx)
+-		if r.configurations.latestIndex <= idx {
+-			r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
++		idx := min(a.LeaderCommitIndex, a.PrevLogEntry+uint64(len(a.Entries)))
++		if idx > r.getCommitIndex() {
++			start := time.Now()
++			r.setCommitIndex(idx)
++			if r.configurations.latestIndex <= idx {
++				r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
++			}
++			r.processLogs(idx, nil)
++			metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "processLogs"}, start)
+ 		}
+-		r.processLogs(idx, nil)
+-		metrics.MeasureSince([]string{"raft", "rpc", "appendEntries", "processLogs"}, start)
+ 	}
+ 
+ 	// Everything went well, set success
+@@ -1891,6 +1903,24 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 		}
+ 		reqConfigurationIndex = req.LastLogIndex
+ 	}
++
++	// An older/duplicate snapshot cannot replace an already applied prefix.
++	// Validate its metadata first; the deferred drain consumes its stream.
++	if req.LastLogIndex <= r.getLastApplied() {
++		resp.Success = true
++		r.setLastContact()
++		return
++	}
++
++	// Read the retained-log plan before publication, without deleting entries:
++	// a failed transfer must preserve possibly committed durable log records.
++	retainedConfigurations, err := r.prepareSnapshot(req.LastLogIndex, req.LastLogTerm)
++	if err != nil {
++		r.logger.Error("failed to prepare logs for snapshot", "error", err)
++		rpcErr = err
++		return
++	}
++
+ 	version := getSnapshotVersion(r.protocolVersion)
+ 	sink, err := r.snapshots.Create(version, req.LastLogIndex, req.LastLogTerm,
+ 		reqConfiguration, reqConfigurationIndex, r.trans)
+@@ -1927,9 +1957,25 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 	// Finalize the snapshot
+ 	if err := sink.Close(); err != nil {
+ 		r.logger.Error("failed to finalize snapshot", "error", err)
++		_ = r.Shutdown()
+ 		rpcErr = err
+ 		return
+ 	}
++
++	// The replacement is durable now. Reconcile before applying or serving it.
++	// Any uncertain cleanup fails closed; startup repeats reconciliation from
++	// the actual restored snapshot before voting, including after a crash here.
++	if !retainedConfigurations.keep {
++		r.logCompactionMu.Lock()
++		err := r.discardUncommittedLogs()
++		r.logCompactionMu.Unlock()
++		if err != nil {
++			_ = r.Shutdown()
++			rpcErr = err
++			return
++		}
++		r.setLatestConfiguration(r.configurations.committed, r.configurations.committedIndex)
++	}
+ 	r.logger.Info("copied to local snapshot", "bytes", n)
+ 
+ 	// Restore snapshot
+@@ -1946,6 +1992,7 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 	// Wait for the restore to happen
+ 	if err := future.Error(); err != nil {
+ 		r.logger.Error("failed to restore snapshot", "error", err)
++		_ = r.Shutdown()
+ 		rpcErr = err
+ 		return
+ 	}
+@@ -1955,11 +2002,23 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
+ 
+ 	// Update the last stable snapshot info
+ 	r.setLastSnapshot(req.LastLogIndex, req.LastLogTerm)
++	r.setCommitIndex(max(r.getCommitIndex(), req.LastLogIndex))
+ 
+ 	// Restore the peer set
+ 	r.setLatestConfiguration(reqConfiguration, reqConfigurationIndex)
+ 	r.setCommittedConfiguration(reqConfiguration, reqConfigurationIndex)
+ 
++	// A matching retained suffix can contain a pending membership change.
++	// Rebuild its latest-configuration view just as startup replays that suffix.
++	for _, entry := range retainedConfigurations.configurations {
++		if err := r.processConfigurationLogEntry(&entry); err != nil {
++			r.logger.Error("failed to restore retained configuration", "error", err)
++			_ = r.Shutdown()
++			rpcErr = err
++			return
++		}
++	}
++
+ 	// Clear old logs if r.logs is a MonotonicLogStore. Otherwise compact the
+ 	// logs. In both cases, log any errors and continue.
+ 	if mlogs, ok := r.logs.(MonotonicLogStore); ok && mlogs.IsMonotonic() {
+diff --git a/snapshot.go b/snapshot.go
+index 8b530f8..1bc4bcd 100644
+--- a/snapshot.go
++++ b/snapshot.go
+@@ -215,11 +215,19 @@ func (r *Raft) takeSnapshot() (string, error) {
+ // the lastLogIdx, and the trailingLogs and trims the logs that
+ // are no longer needed.
+ func (r *Raft) compactLogsWithTrailing(snapIdx uint64, lastLogIdx uint64, trailingLogs uint64) error {
++	r.logCompactionMu.Lock()
++	defer r.logCompactionMu.Unlock()
+ 	// Determine log ranges to compact
+ 	minLog, err := r.logs.FirstIndex()
+ 	if err != nil {
+ 		return fmt.Errorf("failed to get first log index: %v", err)
+ 	}
++	// An empty store reports 0 here, and lastLogIdx may still name an entry
++	// compacted earlier. Deleting from 0 would wrap InmemStore's last index
++	// around to MaxUint64.
++	if minLog == 0 {
++		return nil
++	}
+ 
+ 	// Check if we have enough logs to truncate
+ 	// Use a consistent value for trailingLogs for the duration of this method
+@@ -259,6 +267,152 @@ func (r *Raft) compactLogs(snapIdx uint64) error {
+ 	return r.compactLogsWithTrailing(snapIdx, lastLogIdx, trailingLogs)
+ }
+ 
++// logsMatchSnapshot reports whether our logs agree with a snapshot whose last
++// entry is at index with term. They do if that index is committed here, or if
++// our entry at that index has the same term: by the Log Matching property every
++// entry up to it then matches the leader's. Otherwise our entry there is
++// missing or conflicts.
++func (r *Raft) logsMatchSnapshot(index, term uint64) (bool, error) {
++	if index <= r.getCommitIndex() {
++		return true, nil
++	}
++	var entry Log
++	if err := r.logs.GetLog(index, &entry); err != nil {
++		if errors.Is(err, ErrLogNotFound) {
++			return false, nil
++		}
++		return false, fmt.Errorf("failed to get log %d: %w", index, err)
++	}
++	return entry.Term == term, nil
++}
++
++type snapshotLogPlan struct {
++	keep           bool
++	configurations []Log
++}
++
++// Preparation is read-only: our commit index can lag global commitment, so no
++// durable log may be removed until its replacement snapshot is durable.
++func (r *Raft) prepareSnapshot(index, term uint64) (snapshotLogPlan, error) {
++	r.logCompactionMu.Lock()
++	defer r.logCompactionMu.Unlock()
++	keep, err := r.logsMatchSnapshot(index, term)
++	if err != nil {
++		return snapshotLogPlan{}, err
++	}
++	if !keep {
++		return snapshotLogPlan{}, nil
++	}
++	last, err := r.logs.LastIndex()
++	if err != nil {
++		return snapshotLogPlan{}, err
++	}
++	var configurations []Log
++	for cursor := index; cursor < last; {
++		cursor++
++		var entry Log
++		if err := r.logs.GetLog(cursor, &entry); err != nil {
++			return snapshotLogPlan{}, err
++		}
++		switch entry.Type {
++		case LogConfiguration, LogAddPeerDeprecated, LogRemovePeerDeprecated:
++			configurations = append(configurations, entry)
++		}
++	}
++	return snapshotLogPlan{keep: true, configurations: configurations}, nil
++}
++
++// Reconcile after a VALID snapshot has been restored, before startup can serve
++// or vote. A crash may have published it but not yet cleaned conflicting logs.
++// Drop the covered prefix (now durably represented by the snapshot), and drop
++// the entire suffix only when an existing boundary proves a term conflict.
++// A missing boundary with a retained suffix can be ordinary prior compaction.
++func (r *Raft) reconcileSnapshotLogs() (Log, error) {
++	index, term := r.getLastSnapshot()
++	var boundary Log
++	err := r.logs.GetLog(index, &boundary)
++	if err != nil && !errors.Is(err, ErrLogNotFound) {
++		return Log{}, err
++	}
++	conflict := err == nil && boundary.Term != term
++	matched := err == nil && boundary.Term == term
++	first, err := r.logs.FirstIndex()
++	if err != nil {
++		return Log{}, err
++	}
++	last, err := r.logs.LastIndex()
++	if err != nil {
++		return Log{}, err
++	}
++	if first > 0 && !matched {
++		to := min(index, last)
++		if conflict {
++			to = last
++		}
++		if first <= to {
++			if err := r.logs.DeleteRange(first, to); err != nil {
++				return Log{}, err
++			}
++		}
++	}
++	last, err = r.logs.LastIndex()
++	if err != nil {
++		return Log{}, err
++	}
++	var entry Log
++	if last > 0 {
++		if err := r.logs.GetLog(last, &entry); err != nil {
++			return Log{}, err
++		}
++	}
++	r.setLastLog(entry.Index, entry.Term)
++	r.setCommitIndex(index)
++	return entry, nil
++}
++
++// discardUncommittedLogs deletes every entry above our commit index. It is used
++// when the logs don't match an installed snapshot. Entries up to our commit
++// index are committed, so they match the leader's log. Above it, the snapshot
++// covers every committed entry up to its index. No entry of ours above the
++// snapshot index is committed either: if our entry at the snapshot index
++// conflicts, by Log Matching no later entry of ours is in the leader's log; and
++// the leader sends a snapshot only after AppendEntries found no entry of ours
++// that matches its log beyond the snapshot index.
++//
++// It then sets the last log to the store's last entry, which is at or below
++// the commit index and so below the snapshot index; getLastEntry then reports
++// the snapshot. Installing a snapshot didn't change the last log before this
++// check was added, so a lagging follower was already left in this state. The
++// last log must not name the snapshot index instead: compaction keeps
++// TrailingLogs back from the last log, so it would delete entries counting
++// from past the store's end.
++func (r *Raft) discardUncommittedLogs() error {
++	last, err := r.logs.LastIndex()
++	if err != nil {
++		return fmt.Errorf("failed to get last log index: %w", err)
++	}
++	if commit := r.getCommitIndex(); last > commit {
++		r.logger.Warn("discarding uncommitted logs that don't match the installed snapshot",
++			"from", commit+1, "to", last)
++		if err := r.logs.DeleteRange(commit+1, last); err != nil {
++			return err
++		}
++		if last, err = r.logs.LastIndex(); err != nil {
++			return fmt.Errorf("failed to get last log index: %w", err)
++		}
++	}
++	var term uint64
++	if last > 0 {
++		var entry Log
++		if err := r.logs.GetLog(last, &entry); err != nil {
++			return fmt.Errorf("failed to get log %d: %w", last, err)
++		}
++		term = entry.Term
++	}
++	r.setLastLog(last, term)
++	return nil
++}
++
+ // removeOldLogs removes all old logs from the store. This is used for
+ // MonotonicLogStores after restore. Callers should verify that the store
+ // implementation is monotonic prior to calling.
+diff --git a/state.go b/state.go
+index 5abac1e..0bd18fd 100644
+--- a/state.go
++++ b/state.go
+@@ -119,8 +119,12 @@ func (r *raftState) getLastSnapshot() (index, term uint64) {
+ 
+ func (r *raftState) setLastSnapshot(index, term uint64) {
+ 	r.lastLock.Lock()
+-	r.lastSnapshotIndex = index
+-	r.lastSnapshotTerm = term
++	// A background snapshot captured earlier may finish after a newer remote
++	// installation. The durable snapshot boundary must remain monotonic.
++	if index >= r.lastSnapshotIndex {
++		r.lastSnapshotIndex = index
++		r.lastSnapshotTerm = term
++	}
+ 	r.lastLock.Unlock()
+ }
+ 
