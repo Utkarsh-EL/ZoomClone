@@ -50,12 +50,26 @@
           <h2 id="share-title">Screen-share queue</h2><p id="share-status">Waiting for a meeting snapshot.</p>
           <ol id="share-queue" aria-label="Screen-share waiting list"></ol>
           <div class="actions"><button id="share-request" disabled>Request share turn</button><button id="share-release" disabled hidden>Release share turn</button></div>
-          <p class="muted small">A turn is a logical grant. Screen capture and media transport are not connected yet.</p>
+          <p class="muted small">A turn grants permission to share. Start display capture separately when it is your turn.</p>
         </section>
         <section aria-labelledby="capture-title">
           <h2 id="capture-title">Local capture owner</h2><p id="capture-status">No browser owns capture.</p>
           <div class="actions"><button id="capture-claim" disabled>Claim for this tab</button><button id="capture-release" disabled hidden>Release local ownership</button></div>
           <p class="muted small">One tab per agent can hold this lease. Claiming it does not open a camera, microphone or screen.</p>
+        </section>
+        <section id="media-section" aria-labelledby="media-title" hidden>
+          <h2 id="media-title">Audio, video and display</h2>
+          <p id="media-status" role="status">Media is off.</p>
+          <div class="actions"><button id="media-connect">Connect media</button><button id="media-disconnect" hidden>Disconnect media</button></div>
+          <p class="muted small">Connect to receive media. Claim local capture above, then choose a source. Your browser will ask for permission.</p>
+          <div class="media-source"><span id="mic-status">Microphone off</span><button id="media-mic" disabled>Turn microphone on</button></div>
+          <div class="media-source"><span id="camera-status">Camera off</span><button id="media-camera" disabled>Turn camera on</button></div>
+          <div class="media-source"><span id="screen-status">Display off</span><button id="media-screen" disabled>Share display</button></div>
+          <p id="media-release-review" class="notice small" role="status" hidden>Display capture stopped locally. Review shared commands and the current share turn before releasing it with the queue controls.</p>
+          <p id="playback-status" role="status">Remote playback muted.</p>
+          <button id="media-play" disabled>Play with sound</button>
+          <p id="media-error" class="notice small" role="alert" hidden></p>
+          <div id="remote-media" aria-label="Received media"></div>
         </section>
       </aside>
     </div>

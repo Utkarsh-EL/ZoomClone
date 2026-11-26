@@ -49,7 +49,17 @@ export class MediaRoom {
       if (!hello || typeof hello.epoch !== "string") throw new Error("INVALID_MEDIA_REPLY");
       const epoch = hello.epoch;
       if (!["open", "closePeer"].includes(request.action) && request.epoch !== epoch) throw new Error("SFU_RESTARTED");
-      const current = await context.authorize();
+      let current: MediaSnapshot;
+      try { current = await context.authorize(); }
+      catch (error) {
+        // MeetingStore reports NOT_MEMBER only after current ACTIVE fencing and
+        // credential authentication. Departure cannot publish, but may retire
+        // this previously admitted peer under its exact installed owner/epoch.
+        if (request.action !== 'closePeer' || !(error instanceof Error) || error.message !== 'NOT_MEMBER') throw error;
+        if (peer.touched && peer.epoch === epoch) await this.effect({ action: 'closePeer', epoch: peer.epoch, owner: peer.owner, peerId: context.peerId });
+        peer.touched = false;
+        return { epoch, value: {} };
+      }
       if (current.phase !== "ACTIVE" || !current.runtimeId || !current.incarnation || !current.attemptId) throw new Error("FENCED");
       if (!current.state.members[context.participantId]?.joined) throw new Error("NOT_MEMBER");
       if (request.action === "produce") {

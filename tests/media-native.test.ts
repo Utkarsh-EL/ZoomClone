@@ -33,7 +33,7 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
   const participants: ReturnType<typeof startParticipant>[] = [], attachments: Awaited<ReturnType<typeof serveBrowserAttachment>>[] = [], browsers: Awaited<ReturnType<typeof nativeBrowser>>[] = [];
   const name = `zoom-media-${randomUUID().slice(0, 8)}`, identity = { clusterId, nodeId: randomUUID(), incarnation: randomUUID() }, nodeId = randomUUID(), token = randomBytes(32).toString("hex");
   let container = false;
-  const evidence: any = { base: "be0dc1d", composition: "production participant gateway and provisioned SFU routes", storageLab: storage.project, mediaContainer: name, checks: [] };
+  const evidence: any = { base: "5bf5067", composition: "supervised participant controls through production gateway and provisioned SFU routes", storageLab: storage.project, mediaContainer: name, checks: [] };
   function check(name: string, value: unknown = true) { evidence.checks.push({ name, value }); console.log(`media check: ${name}`); }
   try {
     // Compose's in-container pg_isready can see the temporary initialization
@@ -92,19 +92,29 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     for (const person of ["Alice", "Bob"]) browsers.push(await nativeBrowser(join(storage.root, `browser-${person}`), ["--auto-select-tab-capture-source-by-title=SFU capture source"]));
     const [a, b] = await Promise.all(browsers.map((browser, i) => browser.tab(attachments[i].url)));
     async function ready(tab: typeof a) {
-      await until("native media attachment", async () => await tab.eval("globalThis.attachment?.readyState === 'attached'") ? true : undefined);
-      await tab.eval("import('/media-lab.js').then(({MediaLab}) => { globalThis.media = new MediaLab(attachment); })");
+      await until("native media controls", async () => await tab.eval("globalThis.participantMedia && !document.querySelector('#media-section').hidden") ? true : undefined);
+      await tab.eval("globalThis.media = participantMedia.media");
     }
     await ready(a); await ready(b);
     await browsers[0].cdp("Browser.setPermission", { permission: { name: "camera" }, setting: "denied", origin: attachments[0].origin });
     await a.eval("attachment.claimCapture()");
-    const denied = await a.eval("media.start('camera').then(()=>null,e=>e.name)");
-    assert.equal(denied, "NotAllowedError"); assert.equal(await a.eval("media.capture.tracks.size"), 0); check("native camera permission denial", denied);
+    await until("Alice media eligible", async () => await a.eval("!document.querySelector('#media-connect').disabled") ? true : undefined);
+    await a.eval("document.querySelector('#media-connect').click()");
+    await until("Alice media connected", async () => await a.eval("participantMedia.canStart") ? true : undefined)
+      .catch(async error => { throw new Error(`${error.message}: ${await a.eval("JSON.stringify({enabled:participantMedia.enabled,eligible:participantMedia.eligible,state:media.state,error:participantMedia.error,attempts:participantMedia.attempts,owner:attachment.ownsCapture,status:document.querySelector('#media-status').textContent})")}`); });
+    await a.eval("document.querySelector('#media-camera').click()");
+    await until("camera denial visible", async () => await a.eval("document.querySelector('#media-error').textContent.includes('Permission was denied')") ? true : undefined);
+    assert.equal(await a.eval("media.capture.tracks.size"), 0); check("native camera permission denial visible in participant controls");
     for (let i = 0; i < browsers.length; i++) await browsers[i].cdp("Browser.grantPermissions", { permissions: ["audioCapture", "videoCapture"], origin: attachments[i].origin });
     await b.eval("attachment.claimCapture()");
-    await until("SFU ready after startup", async () => { try { await a.eval("media.open()"); return true; } catch { return undefined; } });
-    await b.eval("media.open()");
-    for (const tab of [a, b]) { await tab.eval("media.start('mic')"); await tab.eval("media.start('camera')"); }
+    await b.eval("document.querySelector('#media-connect').click()");
+    for (const tab of [a, b]) {
+      for (const source of ['mic', 'camera']) {
+        await until("capture control ready", async () => await tab.eval(`!document.querySelector('#media-${source}').disabled`) ? true : undefined);
+        await tab.eval(`document.querySelector('#media-${source}').click()`);
+        await until("source publishing", async () => await tab.eval(`document.querySelector('#${source}-status').textContent.includes('publishing')`) ? true : undefined);
+      }
+    }
     for (const tab of [a, b]) await tab.eval("media.subscribe()");
     async function received(tab: typeof a, screen = false) {
       return until("received native RTP and decoded frames", async () => {
@@ -113,7 +123,23 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
       }, 15000);
     }
     check("bidirectional native audio/video", [await received(a), await received(b)]);
-    const request = await a.eval("attachment.submit({type:'request-share'})");
+    const evidenceRoot = process.env.ZOOM_MEDIA_EVIDENCE ?? '.local/media-evidence'; await mkdir(evidenceRoot, { recursive: true });
+    for (const [label, width, height] of [['desktop', 1440, 1100], ['mobile', 390, 900]] as const) {
+      await browsers[0].cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, a.sessionId);
+      assert.equal(await a.eval('document.documentElement.scrollWidth <= innerWidth'), true, `${label} media controls fit viewport`);
+      const capture = await browsers[0].cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, a.sessionId);
+      await writeFile(join(evidenceRoot, `${label}.png`), Buffer.from(capture.data, 'base64'));
+    }
+    await browsers[0].cdp('Emulation.clearDeviceMetricsOverride', {}, a.sessionId);
+    await a.eval("document.querySelector('#media-play').click()");
+    assert.equal(await a.eval('media.playback'), 'playing');
+    await a.eval("document.querySelector('#media-play').click()"); assert.equal(await a.eval('media.playback'), 'muted');
+    check('explicit playback and responsive desktop/mobile media controls');
+    await a.eval("document.querySelector('#share-request').click()");
+    const request = await until("UI share request saved", async () => {
+      const command = participants[0].session.view().commands.find(c => c.operation.type === 'request-share');
+      return command ? { commandId: command.id } : undefined;
+    });
     await until("committed SQL screen grant", async () => (await store.observe(meetingId)).state.holder?.requestId === request.commandId ? true : undefined);
     const grant = { requestId: request.commandId, grantVersion: (await store.observe(meetingId)).state.grantVersion };
     assert.equal(await a.eval(`media.call({action:'produce',source:'screen',requestId:'${grant.requestId}',grantVersion:0}).then(()=>null,e=>e.message)`), "STALE_GRANT");
@@ -121,7 +147,9 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     const source = await browsers[0].tab(attachments[0].origin);
     await until("capture source document", async () => await source.eval("document.readyState === 'complete'") ? true : undefined);
     await source.eval("document.title = 'SFU capture source'; document.body.textContent='Native display capture source'; setInterval(()=>document.body.textContent=String(Date.now()),100)");
-    await a.eval(`media.start('screen', ${JSON.stringify(grant)})`);
+    await until("display control has grant", async () => await a.eval("!document.querySelector('#media-screen').disabled") ? true : undefined);
+    await a.eval("document.querySelector('#media-screen').click()");
+    await until("display publishes", async () => await a.eval("!!media.capture.tracks.get('screen')?.producer") ? true : undefined);
     await b.eval("media.subscribe()"); check("native display capture received", await received(b, true));
     // Closing the selected source makes Chromium end the native display track.
     // No synthetic ended event or replacement getDisplayMedia implementation.
@@ -138,8 +166,15 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     // exercises Chromium's canceled picker path without stubbing capture APIs.
     const cancelBrowser = await nativeBrowser(join(storage.root, "browser-cancel"), ["--auto-reject-this-tab-capture"]); browsers.push(cancelBrowser);
     const cancelTab = await cancelBrowser.tab(attachments[0].url); await ready(cancelTab); await cancelTab.eval("attachment.claimCapture()");
-    const canceled = await cancelTab.eval("media.capture.start('screen', () => navigator.mediaDevices.getDisplayMedia({video:true,preferCurrentTab:true}), {requestId:'unused',grantVersion:0}).then(()=>null,e=>e.name)");
+    const cancelRequest = participants[0].session.submit({ type: 'request-share' });
+    await until("picker cancel has current grant", async () => await cancelTab.eval(`participantMedia.model.state?.holder?.requestId === '${cancelRequest}'`) ? true : undefined);
+    const cancelGrant = { requestId: cancelRequest, grantVersion: (await store.observe(meetingId)).state.grantVersion };
+    const beforeCancel = participants[0].session.view().commands.length;
+    const canceled = await cancelTab.eval(`media.capture.start('screen', () => navigator.mediaDevices.getDisplayMedia({video:true,preferCurrentTab:true}), ${JSON.stringify(cancelGrant)}).then(()=>null,e=>e.name)`);
     assert.equal(canceled, "NotAllowedError"); assert.equal(await cancelTab.eval("media.capture.tracks.size"), 0); check("native display picker cancel", canceled);
+    assert.equal(participants[0].session.view().commands.length, beforeCancel);
+    await cancelTab.eval(`participantMedia.model.releaseCaptured(${JSON.stringify(cancelGrant)})`);
+    await until("cancel grant released explicitly", async () => (await store.observe(meetingId)).state.holder === null ? true : undefined);
     await until("lease revokes original tracks", async () => await a.eval("media.capture.tracks.size === 0") ? true : undefined);
     const aliceId = participants[0].session.view().participantId;
     const afterRevoke = await b.eval("media.call({action:'list'})");
@@ -155,8 +190,7 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     assert.ok(participants[0].session.view().commands.find(c => c.id === chat)?.outcome);
     const unavailable = await a.eval("media.subscribe().then(()=>false,()=>media.state === 'unavailable')"); assert.equal(unavailable, true);
     storage.docker(["start", name]);
-    await until("rebuild media after SFU restart", async () => { try { await a.eval("media.reconnect()"); return true; } catch { return undefined; } }, 20000);
-    await b.eval("media.reconnect()");
+    await until("supervised rebuild after SFU restart", async () => await a.eval(`media.epoch !== '${oldEpoch}' && media.state === 'ready' && participantMedia.attempts === 0`) && await b.eval("media.state === 'ready' && participantMedia.attempts === 0") ? true : undefined, 25000);
     for (const tab of [a, b]) await tab.eval("media.subscribe()");
     const recovered = [await received(a), await received(b)];
     assert.notEqual(await a.eval("media.epoch"), oldEpoch);
@@ -199,6 +233,11 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     assert.ok(observations.length <= 64 && observations.some((record: any) => record.status === "applied"));
     assert.equal(JSON.stringify(observations).includes(credential.secret), false);
     check("separate bounded persisted effect observations exclude participant credentials");
+    await a.eval("document.querySelector('#leave').click(); document.querySelector('#leave-submit').click()");
+    assert.equal(await a.eval('media.capture.tracks.size'), 0);
+    await until('UI leave committed', async () => !(await store.observe(meetingId)).state.members[aliceId]?.joined ? true : undefined);
+    assert.equal(await a.eval('participantMedia.enabled'), false);
+    check('explicit leave stops local capture immediately and preserves shared command path');
     await Promise.all(participants.map(participant => participant.close()));
     check("participant shutdown explicitly drains local media cleanup before journal close");
     evidence.result = "passed";

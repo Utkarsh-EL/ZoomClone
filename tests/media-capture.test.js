@@ -130,3 +130,38 @@ test('close during Device.load invalidates the open and never creates transports
   for (let i = 0; !finish && i < 20; i++) await new Promise(resolve => setImmediate(resolve));
   assert.ok(finish, 'Device.load reached'); media.closeTransports(); finish(); await assert.rejects(opening, /MEDIA_CANCELED/); assert.equal(creates, 0);
 });
+test('explicit media close drains a late open before a successor can reopen the peer', async () => {
+  const attachment = new EventTarget(); attachment.readyState = 'attached'; let finish; const actions = [];
+  attachment.media = async request => {
+    actions.push(request.action);
+    if (actions.length === 1) await new Promise(resolve => { finish = resolve; });
+    return { epoch: 'epoch', value: { rtpCapabilities: {}, send: {}, recv: {} } };
+  };
+  class FakeDevice { async load() {} createSendTransport() { return { on() {}, close() {} }; } createRecvTransport() { return this.createSendTransport(); } }
+  const media = new MediaLab(attachment, { Device: FakeDevice }), first = media.open();
+  const canceled = assert.rejects(first, /MEDIA_CANCELED/);
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof media.close, 'function');
+  const closing = media.close(), second = media.open(); finish();
+  await canceled; await closing; await second;
+  assert.deepEqual(actions, ['open', 'closePeer', 'open']); assert.equal(media.state, 'ready');
+});
+test('producer polling is single-flight and stale transport callbacks cannot signal a new peer', async () => {
+  const attachment = new EventTarget(); attachment.readyState = 'attached'; const actions = [], transports = [];
+  let finish;
+  attachment.view = () => new Promise(resolve => { finish = resolve; });
+  attachment.media = async request => { actions.push(request.action); return { epoch: 'epoch', value: request.action === 'list' ? [] : { rtpCapabilities: {}, send: {}, recv: {} } }; };
+  class FakeDevice {
+    async load() {};
+    createSendTransport() { const handlers = {}; const t = { on(event, handler) { handlers[event] = handler; }, close() {}, handlers }; transports.push(t); return t; }
+    createRecvTransport() { return this.createSendTransport(); }
+  }
+  const media = new MediaLab(attachment, { Device: FakeDevice }); await media.open();
+  const first = media.subscribe(), second = media.subscribe();
+  assert.equal(first, second); finish({ view: { participantId: 'me' } }); await first;
+  await media.open();
+  const rejected = new Promise(resolve => transports[0].handlers.connect({ dtlsParameters: {} }, () => assert.fail('stale callback completed'), resolve));
+  assert.match((await rejected).message, /MEDIA_CANCELED/);
+  transports[0].handlers.connectionstatechange('failed'); assert.equal(media.state, 'ready');
+  assert.deepEqual(actions, ['open', 'list', 'open']);
+});

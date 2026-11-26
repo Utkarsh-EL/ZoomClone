@@ -33,6 +33,27 @@ function fixture(attachment = new Attachment(), saved = new Map()) {
   return { model, attachment, saved };
 }
 
+test('captured screen release shares the persisted uncertainty guard and original command review', async () => {
+  const f = fixture(); f.attachment.state.holder = { participantId: 'me', requestId: 'captured' }; f.attachment.state.grantVersion = 7;
+  await f.model.refresh(); const submit = f.attachment.submit.bind(f.attachment);
+  f.attachment.submit = async operation => { await submit(operation); throw new Error('ATTACHMENT_TIMEOUT'); };
+  assert.equal(await f.model.releaseCaptured({ requestId: 'captured', grantVersion: 7 }), null);
+  assert.equal(f.model.uncertain, true); await f.model.refresh();
+  assert.deepEqual(f.model.view.commands[0].operation, { type: 'release-share', requestId: 'captured' });
+  const reloaded = fixture(f.attachment, f.saved); await reloaded.model.refresh();
+  assert.equal(reloaded.model.uncertain, true);
+  assert.equal(await reloaded.model.releaseCaptured({ requestId: 'captured', grantVersion: 7 }), null);
+  assert.equal(f.attachment.submissions.length, 1);
+});
+test('captured release never waits out a busy command or releases a replacement grant', async () => {
+  const f = fixture(); f.attachment.state.holder = { participantId: 'me', requestId: 'captured' }; f.attachment.state.grantVersion = 8;
+  await f.model.refresh();
+  assert.equal(await f.model.releaseCaptured({ requestId: 'captured', grantVersion: 7 }), null);
+  f.model.busy = true;
+  assert.equal(await f.model.releaseCaptured({ requestId: 'captured', grantVersion: 8 }), null);
+  f.model.busy = false; await f.model.refresh(); assert.equal(f.attachment.submissions.length, 0);
+});
+
 test("history is a bounded unfiltered page, browsing stays put and latest follows the inbox", async () => {
   const { model, attachment } = fixture();
   await model.refresh();

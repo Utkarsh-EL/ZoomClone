@@ -13,6 +13,19 @@ function fixture() {
   const context = { peerId, participantId, ownsCapture: () => lease, authorize: async () => { reads++; if (!allowed) throw new Error("NOT_READY"); return snapshot; } };
   return { room, context, snapshot, effects, requestId, deny: () => { allowed = false; }, revoke: () => { lease = false; }, reads: () => reads };
 }
+test('departed authenticated participants can tear down only their known owner-scoped peer', async () => {
+  const f = fixture(); let departed = false;
+  const context = { ...f.context, authorize: async () => { if (departed) throw new Error('NOT_MEMBER'); return f.snapshot; } };
+  await f.room.handle(context, { action: 'open' }); departed = true;
+  await assert.rejects(f.room.handle(context, { action: 'open' }), /NOT_MEMBER/);
+  await f.room.handle(context, { action: 'closePeer' });
+  assert.equal(f.effects.at(-1).action, 'closePeer');
+  assert.deepEqual(f.effects.at(-1).owner, { meetingId: f.snapshot.meetingId, generation: 1, runtimeId: f.snapshot.runtimeId, incarnation: f.snapshot.incarnation, attemptId: f.snapshot.attemptId });
+  assert.equal(f.effects.filter(e => e.action === 'sync').length, 1);
+  await f.room.handle(context, { action: 'closePeer' });
+  assert.equal(f.effects.filter(e => e.action === 'closePeer').length, 1);
+  await assert.rejects(f.room.handle({ ...context, authorize: async () => { throw new Error('UNAUTHORIZED'); } }, { action: 'closePeer' }), /UNAUTHORIZED/);
+});
 test("media controls freshly authorize membership, exact grant and local lease", async () => {
   const f = fixture();
   await f.room.handle(f.context, { action: "open" });

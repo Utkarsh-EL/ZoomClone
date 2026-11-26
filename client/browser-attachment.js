@@ -93,3 +93,4 @@ export class BrowserAttachment extends EventTarget {
 }
 
 export const pollIntervalMs = config ? Math.max(10, Math.min(500, Math.floor(config.timeoutMs / 3))) : 500;
+export const mediaEnabled = !!config?.mediaEnabled;

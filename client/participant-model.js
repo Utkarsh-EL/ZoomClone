@@ -17,6 +17,7 @@ export class ParticipantModel extends EventTarget {
   #key;
   #refreshing;
   #disposed = false;
+  #leaveSubmitting = false;
   #changed = () => this.#emit();
 
   constructor(attachment, { load = () => null, save = () => {} } = {}) {
@@ -26,7 +27,7 @@ export class ParticipantModel extends EventTarget {
   }
   get events() { return this.view?.events ?? []; }
   get attached() { return !this.#disposed && this.#attachment.readyState === "attached"; }
-  get leaving() { return this.view?.commands.some(c => c.operation.type === "leave" && !c.outcome) ?? false; }
+  get leaving() { return this.#leaveSubmitting || (this.view?.commands.some(c => c.operation.type === "leave" && !c.outcome) ?? false); }
   get left() { return this.view?.left || this.view?.connection === "left"; }
   get canSubmit() { return !!this.view && this.attached && !this.readFailed && !this.busy && !this.uncertain && !this.leaving && !this.left; }
   get state() { return this.view?.observation?.state; }
@@ -91,6 +92,7 @@ export class ParticipantModel extends EventTarget {
     }
     if (operation.type === "request-share" && (this.ownShare || this.sharePending)) return null;
     if (operation.type === "release-share" && (operation.requestId !== this.ownShare?.requestId || this.sharePending)) return null;
+    if (operation.type === 'leave') this.#leaveSubmitting = true;
     this.busy = true; this.error = ""; this.#emit();
     // Persist before sending: a reload can interrupt the local acceptance reply.
     this.uncertain = true; this.#persist();
@@ -100,13 +102,18 @@ export class ParticipantModel extends EventTarget {
       // A poll may have snapshotted before local acceptance. Drain it, then
       // observe the accepted command before reopening mutation controls.
       await this.#refreshing;
-      await this.refresh(); return commandId;
+      await this.refresh(); this.#leaveSubmitting = false; return commandId;
     } catch (error) {
       this.error = `${error.message}. The operation may already be saved. Review commands before trying again.`;
       return null;
     } finally { this.busy = false; this.#persist(); this.#emit(); }
   }
-  reviewUncertain() { if (!this.busy) { this.uncertain = null; this.error = ""; this.#persist(); this.#emit(); } }
+  releaseCaptured(grant) {
+    const state = this.state;
+    if (state?.holder?.participantId !== this.view?.participantId || state.holder.requestId !== grant.requestId || state.grantVersion !== grant.grantVersion) return Promise.resolve(null);
+    return this.submit({ type: 'release-share', requestId: grant.requestId });
+  }
+  reviewUncertain() { if (!this.busy) { this.#leaveSubmitting = false; this.uncertain = null; this.error = ""; this.#persist(); this.#emit(); } }
   async capture(action) {
     if (!this.canSubmit || this.captureBusy) return;
     this.captureBusy = true; this.error = ""; this.#emit();

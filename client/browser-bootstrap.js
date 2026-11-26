@@ -1,4 +1,4 @@
-import { BrowserAttachment, pollIntervalMs } from "/attachment.js";
+import { BrowserAttachment, pollIntervalMs, mediaEnabled } from "/attachment.js";
 import { ParticipantModel } from "/participant-model.js";
 
 const $ = id => document.getElementById(id);
@@ -20,7 +20,7 @@ try {
     load: key => JSON.parse(sessionStorage.getItem(key) || "null"),
     save: (key, value) => sessionStorage.setItem(key, JSON.stringify(value)),
   });
-  let timer, stopped = false, wasFollowing = false;
+  let timer, stopped = false, wasFollowing = false, participantMedia;
   const participantName = id => model.state?.members[id]?.name ?? (id === model.view?.participantId ? model.view.name : `Participant ${String(id).slice(0, 8)}`);
   function render() {
     const v = model.view, state = model.state;
@@ -110,6 +110,28 @@ try {
     text("snapshot-status", observation ? `Last meeting snapshot: ${observation.observedAt} · event watermark ${observation.watermark}. Local inbox through ${v.cursor.seq}. ${v.connection !== "connected" || !model.attached ? "Retained state may be out of date." : ""}` : "No meeting snapshot yet. Your agent is connecting; saved commands remain pending.");
     const details = { Participant: v.participantId, Meeting: v.meetingId, Cluster: v.clusterId, "Subscription revision": "0 · all meeting events", "Local attachment": `${attachment.attachment.id} · revision ${attachment.attachment.revision}`, "Capture revision": String(attachment.captureState.revision) };
     list("session-details", details, () => Object.entries(details).flatMap(([key, value]) => [node("dt", key), node("dd", value)]));
+    renderMedia();
+  }
+  function renderMedia() {
+    if (!participantMedia) return;
+    const controller = participantMedia, media = controller.media, capture = media.capture;
+    text('media-status', controller.exhausted ? 'Media unavailable. Automatic retries stopped.' : !controller.enabled ? 'Media is off.' : media.state === 'ready' ? 'Media connected. Sources publish only when started below.' : `Media ${media.state} · rebuild attempt ${controller.attempts} of 3.`);
+    $('media-connect').hidden = controller.enabled && !controller.exhausted;
+    $('media-connect').disabled = !controller.eligible;
+    text('media-connect', controller.exhausted ? 'Retry media' : 'Connect media');
+    $('media-disconnect').hidden = !controller.enabled;
+    const names = { mic: 'Microphone', camera: 'Camera', screen: 'Display' };
+    for (const source of ['mic', 'camera', 'screen']) {
+      const entry = capture.tracks.get(source), pending = capture.pending.has(source), active = entry?.track.readyState === 'live';
+      text(`${source}-status`, `${names[source]} ${pending ? 'awaiting permission' : active ? media.state === 'ready' && media.producers.has(entry.producer?.id) ? 'publishing' : 'captured · publication unavailable' : 'off'}`);
+      text(`media-${source}`, pending ? `Cancel ${names[source].toLowerCase()}` : active ? source === 'screen' ? 'Stop display and release turn' : `Turn ${names[source].toLowerCase()} off` : source === 'screen' ? 'Share display' : `Turn ${names[source].toLowerCase()} on`);
+      $(`media-${source}`).disabled = !active && !pending && (!controller.canStart || (source === 'screen' && model.state?.holder?.participantId !== model.view?.participantId));
+    }
+    $('media-release-review').hidden = !capture.releaseNeedsReview;
+    text('playback-status', `Remote playback ${media.playback} · ${media.consumers.size} received sources.`);
+    text('media-play', media.playback === 'playing' ? 'Mute playback' : 'Play with sound');
+    $('media-play').disabled = !media.consumers.size;
+    $('media-error').hidden = !controller.error; text('media-error', controller.error);
   }
   model.addEventListener("change", render);
   $("chat-input").addEventListener("input", () => { $("send").disabled = !model.canSubmit || !$("chat-input").value.trim(); });
@@ -133,8 +155,24 @@ try {
     await model.refresh();
     if (!stopped && model.attached) timer = setTimeout(poll, pollIntervalMs);
   }
-  addEventListener("pagehide", () => { stopped = true; clearTimeout(timer); model.dispose(); attachment.close(); }, { once: true });
+  addEventListener("pagehide", () => { stopped = true; clearTimeout(timer); participantMedia?.dispose(); model.dispose(); attachment.close(); }, { once: true });
   render(); await poll();
+  if (mediaEnabled && !stopped) {
+    const [{ MediaLab }, { ParticipantMedia }] = await Promise.all([import('/media-lab.js'), import('/participant-media.js')]);
+    if (!stopped) {
+      const media = new MediaLab(attachment, { release: grant => model.releaseCaptured(grant), container: $('remote-media') });
+      participantMedia = new ParticipantMedia(model, attachment, media); globalThis.participantMedia = participantMedia;
+      participantMedia.addEventListener('change', renderMedia); $('media-section').hidden = false;
+      $('media-connect').addEventListener('click', () => { void participantMedia.enable(); });
+      $('media-disconnect').addEventListener('click', () => participantMedia.disable());
+      for (const source of ['mic', 'camera', 'screen']) $(`media-${source}`).addEventListener('click', () => {
+        if (media.capture.tracks.has(source) || media.capture.pending.has(source)) void participantMedia.stop(source);
+        else void participantMedia.start(source);
+      });
+      $('media-play').addEventListener('click', () => { if (media.playback === 'playing') media.mute(); else void media.play(); });
+      renderMedia();
+    }
+  }
 } catch (error) {
   text("attachment-status", "unavailable");
   $("error").hidden = false;

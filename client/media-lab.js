@@ -10,6 +10,7 @@ export class MediaLab extends EventTarget {
   playback = 'muted';
   #revision = 0;
   #openTail = Promise.resolve();
+  #subscribing;
   constructor(attachment, { Device: DeviceClass = Device, release, container } = {}) {
     super(); this.Device = DeviceClass; this.container = container;
     this.attachment = attachment;
@@ -42,10 +43,19 @@ export class MediaLab extends EventTarget {
   closeTransports() {
     this.#revision++; this.#disposeTransports(); this.setState('idle');
   }
+  close() {
+    this.closeTransports();
+    // Queue teardown behind an admitted open and ahead of any later reopen.
+    // Attachment shutdown has its own agent-side drain when the socket closes.
+    const work = this.#openTail.then(async () => {
+      if (this.attachment.readyState !== 'closed') await this.attachment.media({ action: 'closePeer' });
+    });
+    this.#openTail = work.catch(() => {}); return work;
+  }
   #disposeTransports() {
     this.send?.close(); this.recv?.close();
     for (const consumer of this.consumers.values()) { consumer.close(); consumer.element?.remove(); }
-    this.consumers.clear(); this.producers.clear(); this.send = null; this.recv = null;
+    this.consumers.clear(); this.producers.clear(); this.send = null; this.recv = null; this.#subscribing = null;
   }
   open() {
     const revision = ++this.#revision;
@@ -90,7 +100,12 @@ export class MediaLab extends EventTarget {
       : () => navigator.mediaDevices.getUserMedia({ video: source === 'camera' ? { width: 320, height: 240, frameRate: 10 } : false, audio: source === 'mic' });
     return this.capture.start(source, acquire, grant);
   }
-  async subscribe() {
+  subscribe() {
+    if (this.#subscribing) return this.#subscribing;
+    const work = this.#subscribe().finally(() => { if (this.#subscribing === work) this.#subscribing = null; });
+    this.#subscribing = work; return work;
+  }
+  async #subscribe() {
     const revision = this.#revision, recv = this.recv, device = this.device;
     const view = await this.attachment.view(), id = view.view.participantId; this.check(revision);
     const producers = await this.call({ action: 'list' }, false, revision);
@@ -117,6 +132,7 @@ export class MediaLab extends EventTarget {
       try { await consumer.element.play(); } catch { if (this.current(revision)) this.playback = 'blocked'; }
     })); this.changed();
   }
+  mute() { this.playback = 'muted'; for (const consumer of this.consumers.values()) consumer.element.muted = true; this.changed(); }
   async stats() {
     const values = [];
     for (const consumer of this.consumers.values()) {

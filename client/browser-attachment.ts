@@ -13,7 +13,7 @@ export interface Attachment { id: string; revision: number }
 export interface CaptureLease { revision: number; owner: Attachment | null }
 export interface BrowserOptions {
   address: string; wire?: ControlWire; timeoutMs?: number; maxClients?: number;
-  /** In-process feasibility composition only; no credentials enter the page. */
+  /** Optional production media composition; no credentials enter the page. */
   experimentalMedia?: { bundle: string; handle(peerId: string, request: MediaRequest, ownsCapture: () => boolean): Promise<unknown>; revoke(peerId: string): Promise<void> };
 }
 const PROTOCOL = "zoom.attachment.v1", OUTPUT_BYTES = 8 * 1024 * 1024, MAX_CLOCK_AHEAD = 1024;
@@ -35,6 +35,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
     ["/", "participant.html", "text/html"], ["/participant.css", "participant.css", "text/css"],
     ["/attachment.js", "browser-attachment.js", "text/javascript"], ["/bootstrap.js", "browser-bootstrap.js", "text/javascript"],
     ["/participant-model.js", "participant-model.js", "text/javascript"],
+    ["/participant-media.js", "participant-media.js", "text/javascript"],
   ]) {
     // The protocol-only service can also be used without the optional page adapter.
     const text = await readFile(new URL(file, import.meta.url), "utf8").catch(error => { if (error.code !== "ENOENT") throw error; return ""; });
@@ -70,7 +71,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
     }
     const asset = assets.get(request.url ?? "");
     if (closing || request.method !== "GET" || !asset) { response.writeHead(404, headers).end(); return; }
-    const text = asset.text.replace("/*ATTACHMENT_CONFIG*/null", JSON.stringify({ ...wire.identity, origin, timeoutMs: timeout }));
+    const text = asset.text.replace("/*ATTACHMENT_CONFIG*/null", JSON.stringify({ ...wire.identity, origin, timeoutMs: timeout, mediaEnabled: !!options.experimentalMedia }));
     response.writeHead(200, { ...headers, "Content-Type": asset.type }).end(text);
   });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024, perMessageDeflate: false,
