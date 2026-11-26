@@ -32,12 +32,29 @@ export class ClientSession {
         this.journal.complete(command.id, outcome);
         if (this.journal.left) { this.state = "left"; return; }
       }
-      for (let pages = 0; pages < 8; pages++) {
+      // One meeting page and one catalog page leave six slots for fair scoped
+      // recovery. Every pass advances the meeting even with busy private groups.
+      for (let pages = 0; pages < 1; pages++) {
         signal?.throwIfAborted();
         const cursor = this.journal.cursor();
         const page = await this.transport.read(this.journal.credential(), cursor.seq, 100);
         this.journal.recordReplay(cursor, page);
         if (page.scannedWatermark === page.watermark) break;
+      }
+      const catalogAfter = this.journal.catalogAfter();
+      this.journal.recordCatalog(catalogAfter, await this.transport.listGroups(this.journal.credential(), catalogAfter, 16));
+      const visited = new Set<string>();
+      for (let pages = 0; pages < 6; pages++) {
+        signal?.throwIfAborted();
+        const groupId = this.journal.nextGroup();
+        if (!groupId || visited.has(groupId)) break;
+        visited.add(groupId);
+        const after = this.journal.groupCursor(groupId);
+        try { this.journal.recordGroupReplay(groupId, after, await this.transport.readGroup(this.journal.credential(), groupId, after, 16)); }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== "GROUP_ACCESS_DENIED") throw error;
+          this.journal.groupUnavailable(groupId);
+        }
       }
       this.state = "connected";
     } catch (error) {

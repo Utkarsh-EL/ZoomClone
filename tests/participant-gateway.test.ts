@@ -22,9 +22,37 @@ function fixture() {
     async read() { calls++; return { meetingId: owner.meetingId, code: "socket", generation: 1, runtimeId: owner.runtimeId, incarnation: owner.incarnation,
       attemptId: owner.attemptId, phase: "ACTIVE" as const, watermark: 1, state: emptyState(), observedAt: new Date().toISOString(),
       events: [{ seq: 1, generation: 1, lamport: 1, kind: "joined", payload: { participantId: identity.nodeId, name: "Alice" } }], scannedWatermark: 1 }; },
+    async listGroups(_auth?: unknown, p?: any, after?: string, limit?: number) { calls++; if (p.secret !== command.secret) throw new StoreError("AUTH_REQUIRED"); return { groups: [], nextAfter: null }; },
+    async readGroup(_auth?: unknown, p?: any, groupId?: string, after?: number, limit?: number): Promise<import("../storage/types.ts").GroupReplay> { calls++; throw new StoreError("GROUP_ACCESS_DENIED"); },
   };
   return { owner, identity, command, token, agent, store, calls: () => calls, unready: () => { ready = false; } };
 }
+
+test("scoped production requests authenticate the caller and reject old protocol handshakes", async () => {
+  const f = fixture(), service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token });
+  const connection = await ParticipantConnection.connect({ ...f, address: service.address });
+  try {
+    assert.deepEqual(await connection.listGroups(f.command, "", 16), { groups: [], nextAfter: null });
+    await assert.rejects(connection.readGroup(f.command, randomUUID(), 0, 16), /GROUP_ACCESS_DENIED/);
+    await assert.rejects(connection.listGroups({ ...f.command, secret: "f".repeat(64) }, "", 16), /AUTH_REQUIRED/);
+    const before = f.calls();
+    await assert.rejects(connection.readGroup(f.command, randomUUID(), 0, 17), /INVALID_REQUEST/);
+    assert.equal(f.calls(), before);
+    const old = new WebSocket(`ws://${service.address}/v2/participant`, "zoom.participant.v1", { headers: { Authorization: `Bearer ${f.token}` } });
+    old.on("error", () => {});
+    await assert.rejects(once(old, "open")); old.terminate();
+  } finally { connection.close(); await service.close(); }
+});
+
+test("a pinned participant connection rejects private history from an impossible future generation", async () => {
+  const f = fixture(), groupId = randomUUID();
+  f.store.readGroup = async () => ({ groupId, watermark: 1, scannedWatermark: 1,
+    events: [{ seq: 1, generation: 9000, lamport: 1, kind: "group-left", payload: { participantId: f.identity.nodeId } }] });
+  const service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token });
+  const connection = await ParticipantConnection.connect({ ...f, address: service.address });
+  try { await assert.rejects(connection.readGroup(f.command, groupId, 0, 16), /INVALID_GROUP_CURSOR/); }
+  finally { connection.close(); await service.close(); }
+});
 
 test("production participant sockets pin authority, stamp replies and pass resume credentials to fenced storage", async () => {
   const f = fixture();
@@ -89,7 +117,7 @@ test("gateway rejects unauthenticated browser/agent sockets and stale owners bef
   const f = fixture(), service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token });
   try {
     await assert.rejects(ParticipantConnection.connect({ ...f, address: service.address, token: "b".repeat(64), timeoutMs: 200 }), /unavailable|401/i);
-    const socket = new WebSocket(`ws://${service.address}/v1/participant`, "zoom.participant.v1", { origin: "http://malicious.example", headers: { Authorization: `Bearer ${f.token}` } });
+    const socket = new WebSocket(`ws://${service.address}/v2/participant`, "zoom.participant.v2", { origin: "http://malicious.example", headers: { Authorization: `Bearer ${f.token}` } });
     await once(socket, "error");
     const stale = await ParticipantConnection.connect({ ...f, address: service.address, owner: { ...f.owner, incarnation: randomUUID() } });
     try { await assert.rejects(stale.execute(f.command), /INCARNATION_MISMATCH/); } finally { stale.close(); }
@@ -113,7 +141,7 @@ test("gateway bounds stalled work and rejects malformed and oversized WebSocket 
     await assert.rejects(second.execute(f.command), /BUSY/);
     await pending;
     for (const data of ["{", "x".repeat(65537), Buffer.from("binary")]) {
-      const socket = new WebSocket(`ws://${service.address}/v1/participant`, "zoom.participant.v1", { headers: { Authorization: `Bearer ${f.token}` } });
+      const socket = new WebSocket(`ws://${service.address}/v2/participant`, "zoom.participant.v2", { headers: { Authorization: `Bearer ${f.token}` } });
       socket.on("error", () => {}); await once(socket, "open");
       const closed = once(socket, "close"); socket.send(data); await closed;
     }
@@ -138,7 +166,7 @@ test("helper routing requires READY metadata and a provisioned matching runtime 
 
 test("idle upgraded sockets are closed at their deadline", async () => {
   const f = fixture(), service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token, timeoutMs: 40 });
-  const socket = new WebSocket(`ws://${service.address}/v1/participant`, "zoom.participant.v1", { headers: { Authorization: `Bearer ${f.token}` } });
+  const socket = new WebSocket(`ws://${service.address}/v2/participant`, "zoom.participant.v2", { headers: { Authorization: `Bearer ${f.token}` } });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await once(socket, "open");

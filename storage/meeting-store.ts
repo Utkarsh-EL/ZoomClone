@@ -7,7 +7,9 @@ import {
   evaluate,
   validateOperation,
   type MeetingState,
+  type MeetingOperation,
 } from "./engine.ts";
+import { executeGroup } from "./group-store.ts";
 import {
   StoreError,
   type Authority,
@@ -17,6 +19,8 @@ import {
   type Observation,
   type ParticipantCredential,
   type Replay,
+  type GroupCatalog,
+  type GroupReplay,
 } from "./types.ts";
 export type {
   Authority,
@@ -301,12 +305,22 @@ export class MeetingStore {
         return prior.rows[0].outcome;
       }
       const state = await this.state(client, owner.meetingId);
+      if (command.operation.type.startsWith("group-")) {
+        const group = await executeGroup(client, owner, state, command);
+        const outcome: Outcome = { ...group, seq: Number(fence.seq), generation: owner.generation, grantVersion: state.grantVersion };
+        await client.query("INSERT INTO zoom.command_outcomes VALUES($1,$2,$3,$4,$5)", [owner.meetingId, command.participantId, command.id, hash, outcome]);
+        ready(authority); return outcome;
+      }
       const evaluated = evaluate(
         state,
         command.participantId,
         command.id,
-        command.operation,
+        command.operation as MeetingOperation,
       );
+      if (command.operation.type === "leave" && evaluated.code === "OK") {
+        await client.query("DELETE FROM zoom.group_members WHERE meeting_id=$1 AND participant_id=$2", [owner.meetingId, command.participantId]);
+        await client.query("DELETE FROM zoom.group_invitations WHERE meeting_id=$1 AND participant_id=$2", [owner.meetingId, command.participantId]);
+      }
       if (!credential.known)
         await client.query(
           "INSERT INTO zoom.participant_credentials VALUES($1,$2,$3)",
@@ -364,6 +378,50 @@ export class MeetingStore {
       );
       ready(authority);
       return outcome;
+    });
+  }
+
+  /** All private reads serialize with membership changes and ownership cutover.
+   * The lock authorizes this page only; a retained cursor grants no access. */
+  private async groupRead<T>(authority: Authority, participant: ParticipantCredential, work: (client: PoolClient, owner: Owner) => Promise<T>): Promise<T> {
+    const owner = { ...authority.owner }; participant = { ...participant };
+    validOwner(owner, this.database.clusterId); verifier(participant); ready(authority);
+    return this.run(this.runtime, async client => {
+      enabled(await this.fence(client, owner.meetingId, true), owner); ready(authority);
+      await this.authenticate(client, owner.meetingId, participant);
+      if (!(await this.state(client, owner.meetingId)).members[participant.participantId]?.joined) throw new StoreError("NOT_MEMBER");
+      const result = await work(client, owner); ready(authority); return result;
+    });
+  }
+  async listGroups(authority: Authority, participant: ParticipantCredential, afterGroupId = "", limit = 16): Promise<GroupCatalog> {
+    participant = { ...participant };
+    if (afterGroupId !== "") uuid(afterGroupId);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 16) throw new StoreError("INVALID_CURSOR");
+    return this.groupRead(authority, participant, async (client, owner) => {
+      const result = await client.query(`SELECT g.group_id,g.name,m.participant_id AS member,i.invitation_id
+        FROM zoom.groups g
+        LEFT JOIN zoom.group_members m ON (m.meeting_id,m.group_id,m.participant_id)=(g.meeting_id,g.group_id,$2::uuid)
+        LEFT JOIN zoom.group_invitations i ON (i.meeting_id,i.group_id,i.participant_id)=(g.meeting_id,g.group_id,$2::uuid)
+        WHERE g.meeting_id=$1 AND (m.participant_id IS NOT NULL OR i.participant_id IS NOT NULL)
+          AND ($3::uuid IS NULL OR g.group_id>$3::uuid) ORDER BY g.group_id LIMIT $4`,
+        [owner.meetingId, participant.participantId, afterGroupId || null, limit + 1]);
+      const groups = result.rows.slice(0, limit).map(r => ({ groupId: r.group_id, name: r.name,
+        ...(r.member ? { membership: "member" as const } : { membership: "invited" as const, invitationId: r.invitation_id }) }));
+      return { groups, nextAfter: result.rows.length > limit ? groups.at(-1)!.groupId : null };
+    });
+  }
+  async readGroup(authority: Authority, participant: ParticipantCredential, groupId: string, after = 0, limit = 16): Promise<GroupReplay> {
+    participant = { ...participant }; uuid(groupId);
+    if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16) throw new StoreError("INVALID_CURSOR");
+    return this.groupRead(authority, participant, async (client, owner) => {
+      const row = (await client.query(`SELECT g.seq FROM zoom.groups g JOIN zoom.group_members m USING(meeting_id,group_id)
+        WHERE g.meeting_id=$1 AND g.group_id=$2 AND m.participant_id=$3`, [owner.meetingId, groupId, participant.participantId])).rows[0];
+      if (!row) throw new StoreError("GROUP_ACCESS_DENIED");
+      const watermark = Number(row.seq);
+      if (after > watermark) throw new StoreError("INVALID_CURSOR");
+      const rows = await client.query("SELECT seq,generation,lamport,kind,payload FROM zoom.group_events WHERE meeting_id=$1 AND group_id=$2 AND seq>$3 ORDER BY seq LIMIT $4", [owner.meetingId, groupId, after, limit]);
+      const events = rows.rows.map(r => ({ ...r, seq: Number(r.seq), generation: Number(r.generation), lamport: Number(r.lamport) }));
+      return { groupId, watermark, scannedWatermark: events.at(-1)?.seq ?? after, events };
     });
   }
 

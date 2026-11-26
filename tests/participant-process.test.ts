@@ -103,7 +103,7 @@ test("production agents retain uncertain join/chat through process restart and t
     proxy.on("connection", downstream => {
       downstream.on("error", () => {});
       if (blocked) { downstream.terminate(); return; }
-      const upstream = new WebSocket(`ws://${nodes[0].route.address}/v1/participant`, "zoom.participant.v1", { headers: { Authorization: `Bearer ${nodes[0].route.token}` } });
+      const upstream = new WebSocket(`ws://${nodes[0].route.address}/v2/participant`, "zoom.participant.v2", { headers: { Authorization: `Bearer ${nodes[0].route.token}` } });
       upstream.on("error", () => downstream.terminate()); downstream.on("close", () => upstream.terminate()); upstream.on("close", () => downstream.terminate());
       const requests = new Map<string, string>(), queued: string[] = [];
       upstream.on("open", () => { for (const data of queued) upstream.send(data); queued.length = 0; });
@@ -136,6 +136,21 @@ test("production agents retain uncertain join/chat through process restart and t
     await until("resumed same join", async () => (await alice.request("view")).connection === "connected" ? true : undefined);
     const bob = await agent("Bob", join(lab.root, "bob.sqlite"));
     await until("Bob joined", async () => (await bob.request("view")).connection === "connected" ? true : undefined);
+    const bobId = (await bob.request("view")).participantId;
+    const created = await alice.request("submit", { operation: { type: "group-create", name: "Process private" } }), groupId = created.commandId;
+    await until("creator subscription", async () => (await alice.request("groups")).groups.some((g: any) => g.groupId === groupId && g.membership === "member") ? true : undefined);
+    await alice.request("submit", { operation: { type: "group-chat", groupId, content: "earlier process history" } });
+    const invited = await alice.request("submit", { operation: { type: "group-invite", groupId, participantId: bobId } });
+    await until("addressed invitation", async () => (await bob.request("groups")).groups.some((g: any) => g.invitationId === invited.commandId) ? true : undefined);
+    dropType = "group-join";
+    const groupJoin = await bob.request("submit", { operation: { type: "group-join", groupId, invitationId: invited.commandId } });
+    await until("group join reply lost", async () => drops === 2 ? true : undefined);
+    await bob.crash(); blocked = false;
+    const resumedBob = await agent("Bob", join(lab.root, "bob.sqlite"));
+    await until("joined subscriber earlier history after process restart", async () => {
+      const view = await resumedBob.request("view"), history = await resumedBob.request("group-history", { groupId });
+      return view.commands.find((c: any) => c.id === groupJoin.commandId)?.outcome?.code === "OK" && history.events.some((e: any) => e.payload.content === "earlier process history") ? true : undefined;
+    });
     let browser = await attachBrowser(alice);
     const send = await browser.call("submit", { operation: { type: "chat", content: "before failure" } });
     browser.close(); browser = await attachBrowser(alice);
@@ -144,11 +159,12 @@ test("production agents retain uncertain join/chat through process restart and t
       assert.equal(view.participantId, aliceId);
       assert.ok(view.commands.some((c: any) => c.id === send.commandId));
     } finally { browser.close(); }
-    await until("both clients replay first chat", async () => (await bob.request("view")).events.some((e: any) => e.payload.content === "before failure") ? true : undefined);
+    await until("both clients replay first chat", async () => (await resumedBob.request("view")).events.some((e: any) => e.payload.content === "before failure") ? true : undefined);
     assert.ok(send.commandId);
     dropType = "chat";
     const lost = await alice.request("submit", { operation: { type: "chat", content: "committed without reply" } });
-    await until("chat reply dropped after commit", async () => drops === 2 ? true : undefined);
+    await until("chat reply dropped after commit", async () => drops === 3 ? true : undefined);
+    const queuedGroup = await alice.request("submit", { operation: { type: "group-chat", groupId, content: "private after takeover" } });
     browser = await attachBrowser(alice);
     try { assert.equal((await browser.call("view")).view.commands.find((c: any) => c.id === lost.commandId).outcome, null); }
     finally { browser.close(); }
@@ -162,7 +178,7 @@ test("production agents retain uncertain join/chat through process restart and t
       const current = await helper.call<MetadataState>("read");
       return result === "READY" && current.meetings[meetingId].generation === 2 ? true : undefined;
     }, 25000);
-    await bob.request("submit", { operation: { type: "chat", content: "while Alice was offline" } });
+    await resumedBob.request("submit", { operation: { type: "chat", content: "while Alice was offline" } });
     await until("offline history committed", async () => (await store.observe(meetingId)).watermark === 5 ? true : undefined);
     alice = await agent("Alice", alicePath);
     const recovered = await until("Alice durable replay through survivor", async () => {
@@ -172,6 +188,9 @@ test("production agents retain uncertain join/chat through process restart and t
     assert.ok(recovered.cursor.seq > priorCursor);
     assert.deepEqual(recovered.events.map((e: any) => e.seq), [1, 2, 3, 4, 5]);
     assert.equal(recovered.commands.find((c: any) => c.id === lost.commandId).outcome.generation, 1);
+    assert.equal(recovered.commands.find((c: any) => c.id === queuedGroup.commandId).outcome.generation, 2);
+    await until("private subscriber recovers after runtime takeover", async () => (await resumedBob.request("group-history", { groupId })).events.some((e: any) => e.payload.content === "private after takeover") ? true : undefined);
+    assert.equal(JSON.stringify(recovered.events).includes("private after takeover"), false);
     browser = await attachBrowser(alice);
     try {
       const browserView = (await browser.call("view")).view;

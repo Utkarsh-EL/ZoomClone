@@ -10,6 +10,7 @@ import type { MeetingCommand, Outcome, Replay } from "../storage/types.ts";
 import { emptyState } from "../storage/engine.ts";
 
 const outcome: Outcome = { code: "OK", seq: 1, generation: 1, grantVersion: 0 };
+const noGroups = { async listGroups() { return { groups: [], nextAfter: null }; }, async readGroup(): Promise<never> { throw new Error("GROUP_ACCESS_DENIED"); } };
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "zoom-session-"));
   const path = join(root, "session.sqlite");
@@ -58,7 +59,7 @@ test("lost replies survive agent restart and replay the exact command before lat
   let loseReply = true;
   const transport = {
     async execute(command: MeetingCommand) { sent.push(structuredClone(command)); if (loseReply) throw new Error("LOST_REPLY"); return outcome; },
-    async read() { return page(f.target.meetingId, [1]); }, close() {},
+    ...noGroups, async read() { return page(f.target.meetingId, [1]); }, close() {},
   };
   try {
     let session = new ClientSession(journal, async () => transport);
@@ -109,7 +110,7 @@ test("concurrent callers serialize one join and ordered pending commands with bo
   const blocked = new Promise<void>(r => { release = r; });
   const session = new ClientSession(journal, async () => ({
     async execute(c) { sent.push(c); resolve(); await blocked; return outcome; },
-    async read() { return page(f.target.meetingId, []); }, close() {},
+    ...noGroups, async read() { return page(f.target.meetingId, []); }, close() {},
   }));
   try {
     const a = session.submit({ type: "chat", content: "a" }), b = session.submit({ type: "chat", content: "b" });
@@ -134,7 +135,7 @@ test("leave forms a durable queue boundary and abort preserves an uncertain comm
     let reject!: (error: Error) => void;
     const session = new ClientSession(journal, async () => ({
       async execute() { entered(); return new Promise<Outcome>((_, r) => { reject = r; }); },
-      async read() { return page(f.target.meetingId, []); }, close() { reject(new Error("CLOSED")); },
+      ...noGroups, async read() { return page(f.target.meetingId, []); }, close() { reject(new Error("CLOSED")); },
     }));
     const running = session.run(abort.signal);
     await arrived; abort.abort(); await running;
@@ -148,7 +149,7 @@ test("abort during route lookup cannot send a command after cancellation", async
   const blocked = new Promise<void>(r => { release = r; }), arrived = new Promise<void>(r => { entered = r; });
   const session = new ClientSession(journal, async () => {
     entered(); await blocked;
-    return { async execute() { sent++; return outcome; }, async read() { return page(f.target.meetingId, []); }, close() {} };
+    return { async execute() { sent++; return outcome; }, ...noGroups, async read() { return page(f.target.meetingId, []); }, close() {} };
   });
   try {
     const running = session.run(abort.signal); await arrived; abort.abort(); release(); await running;

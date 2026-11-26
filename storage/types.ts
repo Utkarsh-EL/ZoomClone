@@ -26,7 +26,17 @@ export interface Outcome {
   seq: number;
   generation: number;
   grantVersion: number;
+  groupId?: string;
+  groupSeq?: number;
 }
+export interface GroupSummary {
+  groupId: string;
+  name: string;
+  membership: "member" | "invited";
+  invitationId?: string;
+}
+export interface GroupCatalog { groups: GroupSummary[]; nextAfter: string | null }
+export interface GroupReplay { groupId: string; watermark: number; scannedWatermark: number; events: MeetingEvent[] }
 export interface MeetingEvent {
   seq: number;
   generation: number;

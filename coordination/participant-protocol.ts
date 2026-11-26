@@ -2,12 +2,12 @@ import { isIP } from "node:net";
 import { UUID_PATTERN } from "./wire.ts";
 import type { Owner } from "../storage/types.ts";
 
-export const PARTICIPANT_PROTOCOL = "zoom.participant.v1";
+export const PARTICIPANT_PROTOCOL = "zoom.participant.v2";
 export const PARTICIPANT_REQUEST_BYTES = 64 * 1024;
 export function participantURL(address: string): URL {
-  const url = new URL(`ws://${address}/v1/participant`), host = url.hostname.replace(/^\[|\]$/g, "");
+  const url = new URL(`ws://${address}/v2/participant`), host = url.hostname.replace(/^\[|\]$/g, "");
   if (!((isIP(host) === 4 && host.startsWith("127.")) || host === "::1") || !url.port || url.username || url.password
-    || url.pathname !== "/v1/participant" || url.search || url.hash) throw new Error("INVALID_PARTICIPANT_ADDRESS");
+    || url.pathname !== "/v2/participant" || url.search || url.hash) throw new Error("INVALID_PARTICIPANT_ADDRESS");
   return url;
 }
 export function participantTimeout(value = 4000): number {

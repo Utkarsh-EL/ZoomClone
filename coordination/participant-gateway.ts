@@ -20,7 +20,7 @@ function credential(value: unknown, nodeId: string, command = false): boolean {
 
 /** Trusted local participant-agent ingress. Each request still checks current
  * runtime authority and opens a fresh SQL transaction with the exact fence. */
-export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStore, "execute" | "read">, options: {
+export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStore, "execute" | "read" | "listGroups" | "readGroup">, options: {
   address: string; token: string; wire?: ControlWire; timeoutMs?: number; maxConcurrent?: number; maxClients?: number;
   media?: RuntimeMedia;
 }) {
@@ -40,7 +40,7 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
   server.on("connection", socket => { socket.setTimeout(deadline, () => socket.destroy()); socket.on("error", () => {}); });
   server.on("upgrade", (request, socket, head) => {
     const supplied = Buffer.from(request.headers.authorization ?? "");
-    if (closing || request.url !== "/v1/participant" || request.headers.origin !== undefined
+    if (closing || request.url !== "/v2/participant" || request.headers.origin !== undefined
       || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)
       || request.headers["sec-websocket-protocol"] !== PARTICIPANT_PROTOCOL) {
       socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"); return;
@@ -73,10 +73,12 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
         let result: unknown = null, error: { code: string; message: string } | undefined;
         try {
           const body = packet.body;
-          if (!record(body) || body.version !== 1 || !validParticipantOwner(body.owner)
-            || !fields(body, ["version", "owner", "operation", "command", "credential", "after", "limit", "subscriptionRevision", "peerId", "media", "ownsCapture"])) throw new StoreError("INVALID_REQUEST");
+          if (!record(body) || body.version !== 2 || !validParticipantOwner(body.owner)
+            || !fields(body, ["version", "owner", "operation", "command", "credential", "after", "limit", "subscriptionRevision", "peerId", "media", "ownsCapture", "groupId", "afterGroupId"])) throw new StoreError("INVALID_REQUEST");
           const owner = body.owner;
           if (body.operation !== "media" && [body.peerId, body.media, body.ownsCapture].some(value => value !== undefined)) throw new StoreError("INVALID_REQUEST");
+          if (body.operation !== "list-groups" && body.afterGroupId !== undefined) throw new StoreError("INVALID_REQUEST");
+          if (body.operation !== "read-group" && body.groupId !== undefined) throw new StoreError("INVALID_REQUEST");
           if (body.operation === "execute") {
             const c = body.command;
             if (!credential(c, packet.nodeId, true) || !record(c) || typeof c.id !== "string" || !UUID_PATTERN.test(c.id)
@@ -87,6 +89,16 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
             if (!credential(body.credential, packet.nodeId) || body.command !== undefined || body.subscriptionRevision !== 0
               || !Number.isSafeInteger(body.after) || (body.after as number) < 0 || !Number.isSafeInteger(body.limit)
               || (body.limit as number) < 1 || (body.limit as number) > 100) throw new StoreError("INVALID_REQUEST");
+          } else if (body.operation === "list-groups") {
+            if (!credential(body.credential, packet.nodeId) || typeof body.afterGroupId !== "string"
+              || (body.afterGroupId !== "" && !UUID_PATTERN.test(body.afterGroupId))
+              || !Number.isSafeInteger(body.limit) || (body.limit as number) < 1 || (body.limit as number) > 16
+              || [body.command, body.after, body.subscriptionRevision].some(value => value !== undefined)) throw new StoreError("INVALID_REQUEST");
+          } else if (body.operation === "read-group") {
+            if (!credential(body.credential, packet.nodeId) || typeof body.groupId !== "string" || !UUID_PATTERN.test(body.groupId)
+              || !Number.isSafeInteger(body.after) || (body.after as number) < 0 || !Number.isSafeInteger(body.limit)
+              || (body.limit as number) < 1 || (body.limit as number) > 16
+              || [body.command, body.subscriptionRevision].some(value => value !== undefined)) throw new StoreError("INVALID_REQUEST");
           } else if (body.operation === "media") {
             if (!credential(body.credential, packet.nodeId) || typeof body.peerId !== "string" || !UUID_PATTERN.test(body.peerId)
               || !record(body.media) || typeof body.media.action !== "string" || typeof body.ownsCapture !== "boolean"
@@ -97,6 +109,8 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
           if (!authority || !authority.ready()) throw new StoreError("NOT_READY");
           if (!sameOwner(authority.owner, owner)) throw new StoreError("FENCED");
           if (body.operation === "execute") result = await store.execute(authority, body.command as unknown as MeetingCommand);
+          else if (body.operation === "list-groups") result = await store.listGroups(authority, body.credential as unknown as ParticipantCredential, body.afterGroupId as string, body.limit as number);
+          else if (body.operation === "read-group") result = await store.readGroup(authority, body.credential as unknown as ParticipantCredential, body.groupId as string, body.after as number, body.limit as number);
           else if (body.operation === "media") {
             if (!options.media) throw new StoreError("MEDIA_DISABLED");
             result = await options.media.handle(owner.meetingId, {

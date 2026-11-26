@@ -2,7 +2,8 @@ import WebSocket from "ws";
 import type { HelperAccess, MetadataState } from "../coordination/helper-client.ts";
 import { ControlWire, MAX_ENVELOPE_BYTES, type Identity } from "../coordination/wire.ts";
 import { record, validParticipantOwner, sameOwner, participantURL, participantTimeout, participantToken, PARTICIPANT_PROTOCOL } from "../coordination/participant-protocol.ts";
-import type { MeetingCommand, Outcome, Owner, ParticipantCredential, Replay } from "../storage/types.ts";
+import type { GroupCatalog, GroupReplay, MeetingCommand, Outcome, Owner, ParticipantCredential, Replay } from "../storage/types.ts";
+import { validCatalog, validGroupReplay } from "./group-validation.ts";
 import { validOutcome } from "./session-journal.ts";
 import type { ParticipantTransport } from "./types.ts";
 import type { MediaRequest } from "../media/room.ts";
@@ -58,7 +59,7 @@ export class ParticipantConnection implements ParticipantTransport {
   private call(body: object): Promise<unknown> {
     if (this.pending) return Promise.reject(new Error("PARTICIPANT_BUSY"));
     if (this.socket.readyState !== WebSocket.OPEN) return Promise.reject(new Error("PARTICIPANT_CLOSED"));
-    const packet = this.wire.request({ version: 1, owner: this.owner, ...body });
+    const packet = this.wire.request({ version: 2, owner: this.owner, ...body });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.fail(new Error("PARTICIPANT_TIMEOUT")); this.socket.terminate(); }, this.timeoutMs);
       this.pending = { requestId: packet.requestId, resolve, reject, timer };
@@ -77,6 +78,14 @@ export class ParticipantConnection implements ParticipantTransport {
   }
   async media(credential: ParticipantCredential, peerId: string, media: MediaRequest, ownsCapture: boolean): Promise<any> {
     return this.call({ operation: "media", credential: { participantId: credential.participantId, secret: credential.secret }, peerId, media, ownsCapture });
+  }
+  async listGroups(credential: ParticipantCredential, afterGroupId: string, limit: number): Promise<GroupCatalog> {
+    const value = await this.call({ operation: "list-groups", credential: { participantId: credential.participantId, secret: credential.secret }, afterGroupId, limit });
+    if (!validCatalog(value, afterGroupId)) throw new Error("INVALID_GROUP_CATALOG"); return value;
+  }
+  async readGroup(credential: ParticipantCredential, groupId: string, after: number, limit: number): Promise<GroupReplay> {
+    const value = await this.call({ operation: "read-group", credential: { participantId: credential.participantId, secret: credential.secret }, groupId, after, limit });
+    if (!validGroupReplay(value, groupId, after) || value.events.some(e => e.generation > this.owner.generation)) throw new Error("INVALID_GROUP_CURSOR"); return value;
   }
 }
 

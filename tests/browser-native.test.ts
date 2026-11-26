@@ -180,14 +180,15 @@ test("native browser reload and CLI retain one identity, pending IDs, inbox and 
     const interactiveSession = new ClientSession(interactiveJournal, async () => ({
       async execute(command) {
         if (outcomes.has(command.id)) return outcomes.get(command.id);
-        const result = evaluateCommand(state, command.participantId, command.id, command.operation); state = result.state;
+        if (command.operation.type.startsWith("group-")) throw new Error("GROUP_ACCESS_DENIED");
+        const result = evaluateCommand(state, command.participantId, command.id, command.operation as import("../storage/engine.ts").MeetingOperation); state = result.state;
         if (result.event) events.push({ ...result.event, seq: events.length + 1, generation: 1, lamport: command.lamport + 1 });
         const outcome = { code: result.code, seq: events.length, generation: 1, grantVersion: state.grantVersion }; outcomes.set(command.id, outcome); return outcome;
       },
       async read(_credential, after, limit) {
         const page = events.filter(e => e.seq > after).slice(0, limit);
         return { ...runtime, meetingId: interactiveTarget.meetingId, code: "interactive", phase: "ACTIVE", generation: 1, observedAt: new Date().toISOString(), state: structuredClone(state), watermark: events.length, scannedWatermark: after + page.length, events: structuredClone(page) };
-      }, close() {},
+      }, async listGroups() { return { groups: [], nextAfter: null }; }, async readGroup() { throw new Error("GROUP_ACCESS_DENIED"); }, close() {},
     }));
     const controller = new AbortController();
     const running = interactiveSession.run(controller.signal, () => {}, 10);

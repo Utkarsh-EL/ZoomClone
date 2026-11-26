@@ -1,6 +1,20 @@
 # Distributed meeting redesign handoff
 
 Date: 2026-11-26
+Current continuation authority: the user's persistent demo goal supersedes all older instructions below to stop after an increment. See [demo execution record](../plans/2026-11-26-single-computer-demo.md). Continue inline through usable group controls, local start/status/stop controls and a full tested rehearsal; independent review for substantial safety changes. No push/merge/deployment.
+
+## Private group storage, protocol and recovery integration
+
+Increment 2 is implemented. Additive SQL migration 003 stores private groups/members/invitations/events separately from meeting state/events. Group decisions and every catalog/history page use the current ACTIVE owner and meeting `FOR UPDATE` fence; authenticated original outcomes remain available after leave/takeover. Meeting leave deletes group memberships and addressed invitations atomically. Group failures allocate no public events or private positions; original outcomes contain positions/status only. Media authorization/lifecycle paths are unchanged.
+
+The one supported participant gateway is now `/v2/participant`, body version 2, subprotocol `zoom.participant.v2`; old handshakes are rejected. Stop old processes before upgrading. SQLite identity format 2 transactionally adds scoped catalog/progress/inbox storage while retaining credentials, exact pending/outcome JSON and ordering, meeting inbox/cursor/clock. A pass reads one meeting page, one catalog page and up to six fairly scheduled group pages, all bounded. Completed catalog sweeps mark removed entries left while retaining local history. The shared CLI adds `groups` and `group-history` read actions; group submissions already use ordinary `submit`. Browser group controls remain next.
+
+Verification: default **148/148**, typecheck and whitespace passed; real storage **16/16** including private access, multiple earlier-history subscribers, leave/reinvite/departure, takeover/original-ID retries, read/leave lock ordering, private-event rollback and real schema-2→3 preservation. Real recovery/runtime/participant suite passed (19 tests at that run, before the two extra SQL coverage cases): lost group-join reply survives participant restart, private backlog/delivery survives two runtime crashes and takeover, old public replay and quorum-loss behavior retained. Actual historical `ac0e70f` journal and Database code rejected upgraded formats; original pending journal survived. No native media/browser rerun at this storage boundary; those remain at integration gate.
+
+Independent read-only review found no Critical/Important defects and two Minor gaps. Future-generation group replay acceptance was reproduced RED→GREEN at the pinned transport; upgrade coverage now seeds/checks exact meeting inbox/advanced cursor/clock and actual historical-binary refusal was exercised. No deferred review findings or second independent verdict claimed. Local logs are under `.local/`; recorded PostgreSQL labs: `zoom-storage-c6acee2e` (runtime run), `zoom-storage-837e382d` (final storage/upgrade run), both stopped with volumes retained.
+
+Next: implement group browser controls and four-client acceptance, then local demo orchestration and broad regression/rehearsal; continue without per-commit approval. All older exact-next-action and effort recommendations below are historical.
+
 Status: existing coordinator, consensus repair, PostgreSQL storage, runtime recovery/readiness/renewal, Chord discovery, shared durable browser/CLI participant sessions, participant UI and provisioned supervised microphone/camera/display/playback are implemented on milestone-5. The pure group decision engine now exists; durable group commands/history and browser/CLI group controls remain unfinished. Meeting-code entry, disconnect grace, supervisor/dashboard and broader deployment remain unfinished.
 
 ## Current agreed chat direction

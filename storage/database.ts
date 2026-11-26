@@ -85,7 +85,7 @@ export class Database {
         await client.query(
           "CREATE TABLE IF NOT EXISTS public.zoom_schema_migrations(version int PRIMARY KEY, digest text NOT NULL)",
         );
-        const migrations = ["001-meetings.sql", "002-inspection.sql"];
+        const migrations = ["001-meetings.sql", "002-inspection.sql", "003-groups.sql"];
         const version = await client.query(
           "SELECT max(version) AS version FROM public.zoom_schema_migrations",
         );

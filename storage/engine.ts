@@ -1,4 +1,5 @@
 import { UUID_PATTERN } from "../coordination/wire.ts";
+import { validateGroupOperation, type GroupOperation } from "./group-engine.ts";
 
 export interface ShareRequest {
   participantId: string;
@@ -10,12 +11,13 @@ export interface MeetingState {
   queue: ShareRequest[];
   grantVersion: number;
 }
-export type Operation =
+export type MeetingOperation =
   | { type: "join"; name: string }
   | { type: "chat"; content: string }
   | { type: "request-share" }
   | { type: "release-share"; requestId: string }
   | { type: "leave" };
+export type Operation = MeetingOperation | GroupOperation;
 export interface Evaluation {
   code: string;
   state: MeetingState;
@@ -30,6 +32,9 @@ export function emptyState(): MeetingState {
 export function validateOperation(operation: Operation): void {
   if (!operation || typeof operation !== "object" || Array.isArray(operation))
     throw new Error("Invalid operation");
+  if (typeof operation.type === "string" && operation.type.startsWith("group-")) {
+    validateGroupOperation(operation as GroupOperation); return;
+  }
   const fields: Record<string, string[]> = {
     join: ["type", "name"],
     chat: ["type", "content"],
@@ -37,7 +42,7 @@ export function validateOperation(operation: Operation): void {
     "release-share": ["type", "requestId"],
     leave: ["type"],
   };
-  const allowed = fields[operation.type];
+  const allowed = typeof operation.type === "string" && Object.hasOwn(fields, operation.type) ? fields[operation.type] : undefined;
   if (!allowed || Object.keys(operation).some((key) => !allowed.includes(key)))
     throw new Error("Invalid operation fields");
   if (
@@ -69,7 +74,7 @@ export function evaluate(
   input: MeetingState,
   participantId: string,
   commandId: string,
-  operation: Operation,
+  operation: MeetingOperation,
 ): Evaluation {
   validateOperation(operation);
   if (!UUID_PATTERN.test(participantId) || !UUID_PATTERN.test(commandId))

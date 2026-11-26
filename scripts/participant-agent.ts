@@ -37,6 +37,8 @@ try {
         let result: unknown;
         if (value.action === "submit") result = { commandId: agent.session.submit(value.operation as Operation) };
         else if (value.action === "view") result = agent.session.view(value.after, value.limit);
+        else if (value.action === "groups") result = agent.session.journal.groupsView(value.afterGroupId, value.limit);
+        else if (value.action === "group-history") result = agent.session.journal.groupView(value.groupId, value.after, value.limit);
         else throw new Error("INVALID_REQUEST");
         output({ id, result });
       } catch { output({ ...(typeof id === "string" && id.length <= 100 ? { id } : {}), error: "INVALID_REQUEST" }); }
