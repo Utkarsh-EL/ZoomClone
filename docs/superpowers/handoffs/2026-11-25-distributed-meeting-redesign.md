@@ -15,9 +15,19 @@ Choose effort for the next bounded task, rather than inheriting a recommendation
 
 For a session defining committed subscription/replay semantics, **high** is a reasonable starting recommendation. With an agreed plan, **medium** is the preferred implementation starting point. Every future handoff should name the upcoming phase and explain its effort recommendation briefly; do not copy high forward solely because the project is distributed or the session is long.
 
-Recommended model for the next phase: **GPT-6.1, high effort**, for the unresolved committed subscription/replay protocol. Medium remains the implementation starting point after those semantics are agreed.
+Recommended model for the next phase: **GPT-6.1, high effort**, for review/approval or refinement of the proposed committed subscription/replay protocol. Medium remains the implementation starting point after those semantics and a bounded plan are agreed.
 
-Continuation text: "Continue from the latest release-review checkpoint and this updated handoff/spec. The stale release-review banner is fixed and verified. Next, design committed topic/subscription eligibility, revision transitions and replay cursor semantics as a separate bounded task before adding filtering. Keep revision zero unfiltered; preserve one shared ClientSession/journal, original command uncertainty and exact release identity, supervised media lifecycle, readiness and epoch/lease fences. Use GPT-6.1 with high effort for this protocol design, then medium for implementing agreed transitions. Commit verified increments and update the handoff."
+Continuation text: "Continue from the committed subscription-design checkpoint and this updated handoff/spec. Read docs/superpowers/specs/2026-11-26-committed-subscriptions-design.md. It is a protocol proposal, not implemented filtering or an approved implementation plan. Resolve/approve prospective eligibility, committed boundary/CAS, scoped cursor and explicit v2 maintenance activation choices, then write a bounded implementation plan. Keep revision zero unfiltered; preserve one shared ClientSession/journal, original command uncertainty and exact release identity, supervised media lifecycle, readiness/renewal and SQL/SFU/local lease fences. Use GPT-6.1 high for protocol refinement and medium for agreed implementation increments. Commit verified increments and update the handoff."
+
+## Bounded subscription protocol design
+
+Continued from `f6ffdd6` without product-code changes. The separate [design proposal](../specs/2026-11-26-committed-subscriptions-design.md) defines prospective per-participant committed eligibility, expected-revision CAS, immutable revision intervals, always-visible broadcast/control events and explicit scanned-window cursor transitions. A page finishes the old revision through the subscription boundary event and atomically persists the next revision/cursor with eligible inbox rows. Snapshot/current subscription metadata and command outcomes cannot move a lagging replay cursor. Revision zero remains entirely unfiltered; positive revisions can return empty visible pages with bounded scanned progress. Previously delivered history stays in the one shared inbox; newly selected topics have no implicit historical backfill.
+
+The proposal also specifies stable uncertain outcomes and conflicts, transactional journal migration without changing pending records/identity, explicit v2 negotiation, maintenance deployment before feature activation, and a separate fresh-state media authorization path so filtering cannot affect grants or media controls. It includes interleavings and later implementation acceptance criteria. These are recommended choices awaiting user approval, not an implementation or runtime-verification claim. No SQL/SQLite schema, Raft metadata, cursor DTO, domain command, media behavior or filtering implementation changed in this task.
+
+One fresh read-only builder check found no important unanswered planning questions provided the maintenance procedure drains participant RPCs/closes journal handles and revokes every old runtime/recovery SQL login, terminates sessions and prevents reconnection. Those conditions are incorporated in the proposal. Documentation links, whitespace and change scope are the verification for this task; no new product/native/runtime/consensus test result is claimed.
+
+Exact next action: review/approve or revise the separate proposal, then write the bounded implementation plan before implementing filtering. Preserve all release-review, session uncertainty, readiness/renewal, local capture and SQL/SFU fencing guarantees. The remaining broader product/deployment work listed below is unchanged.
 
 ## Release-review reconciliation correction
 
@@ -27,7 +37,7 @@ Six focused regressions were reproduced RED→GREEN, including actual Participan
 
 Preserved: shared submission guard and original durable commands, exact holder/request/grant identity, supervised media lifecycle, readiness/renewal, epoch/caller/local lease fences and unfiltered revision zero. No backend/schema/cursor/filtering change. The reviewer set physical-device/network deployment and subscription semantics aside as unchanged separate work; those limits stand, so this correction makes no deployment-readiness or subscription-completion claim.
 
-Exact next action: design committed subscription eligibility and replay revision/cursor transitions as a separate bounded task. Do not implement filtering under revision zero. Physical devices, audible playback, independent-host/TURN deployment, meeting-code entry, disconnect grace and the broader supervisor/dashboard remain unfinished.
+Historical next action (proposal now written above): design committed subscription eligibility and replay revision/cursor transitions as a separate bounded task. Do not implement filtering under revision zero. Physical devices, audible playback, independent-host/TURN deployment, meeting-code entry, disconnect grace and the broader supervisor/dashboard remain unfinished.
 
 ## Supervised participant media controls
 
