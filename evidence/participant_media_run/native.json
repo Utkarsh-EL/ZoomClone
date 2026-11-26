@@ -1,0 +1,197 @@
+{
+  "base": "5bf5067",
+  "composition": "supervised participant controls through production gateway and provisioned SFU routes",
+  "storageLab": "zoom-storage-fdea9478",
+  "mediaContainer": "zoom-media-268bea7c",
+  "checks": [
+    {
+      "name": "real PostgreSQL, three helpers, provisioned runtime route and two distinct shared sessions",
+      "value": true
+    },
+    {
+      "name": "native camera permission denial visible in participant controls",
+      "value": true
+    },
+    {
+      "name": "bidirectional native audio/video",
+      "value": [
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 4234,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 3048,
+            "frames": 1
+          }
+        ],
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 6957,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 34863,
+            "frames": 22
+          }
+        ]
+      ]
+    },
+    {
+      "name": "explicit playback and responsive desktop/mobile media controls",
+      "value": true
+    },
+    {
+      "name": "stale screen grant rejected before producer creation",
+      "value": true
+    },
+    {
+      "name": "native display capture received",
+      "value": [
+        {
+          "kind": "audio",
+          "source": "mic",
+          "bytes": 11246,
+          "frames": 0
+        },
+        {
+          "kind": "video",
+          "source": "camera",
+          "bytes": 30875,
+          "frames": 20
+        },
+        {
+          "kind": "video",
+          "source": "screen",
+          "bytes": 2490,
+          "frames": 1
+        }
+      ]
+    },
+    {
+      "name": "native browser source ended, exact single release",
+      "value": {
+        "commandId": "dc1d0cf1-df66-441a-8aea-ba6bd811fda0",
+        "requestId": "9a7211bc-0ad1-4211-87d2-2b8b6b464920"
+      }
+    },
+    {
+      "name": "native display picker cancel",
+      "value": "NotAllowedError"
+    },
+    {
+      "name": "lease replacement stops original capture and successor remains usable",
+      "value": true
+    },
+    {
+      "name": "SFU crash leaves chat usable, supervised media rebuild with new epoch",
+      "value": {
+        "elapsedMs": 7078.069499999998,
+        "stats": [
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 3273,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 8371,
+              "frames": 4
+            }
+          ],
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 2626,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 7083,
+              "frames": 3
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "name": "browser and CLI retain identity, original command IDs and unfiltered revision zero",
+      "value": true
+    },
+    {
+      "name": "real TCP isolation: takeover chat works, old runtime and stale SQL authority refuse new media",
+      "value": true
+    },
+    {
+      "name": "successor reconciles same provisioned SFU after healing",
+      "value": [
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 1585,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 9584,
+            "frames": 4
+          }
+        ],
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 695,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 3466,
+            "frames": 1
+          }
+        ]
+      ]
+    },
+    {
+      "name": "old runtime drain cannot tear down successor-owned transports",
+      "value": true
+    },
+    {
+      "name": "separate bounded persisted effect observations exclude participant credentials",
+      "value": true
+    },
+    {
+      "name": "explicit leave stops local capture immediately and preserves shared command path",
+      "value": true
+    },
+    {
+      "name": "participant shutdown explicitly drains local media cleanup before journal close",
+      "value": true
+    }
+  ],
+  "runtimeRenewals": {
+    "ok": 46,
+    "errors": {
+      "node is not the leader": 1,
+      "Helper unavailable; command outcome may be unknown. Retry the same command ID and contents.": 8
+    }
+  },
+  "lastRenewalAtMs": 53074.9557,
+  "result": "passed"
+}

@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-26",
+  "base": "5bf5067",
+  "requestedCheckpoint": "9240bce",
+  "implementation": "6af610d",
+  "increments": ["c8c2b4b", "c5e6ac4", "6af610d"],
+  "result": "passed",
+  "tests": {
+    "default": "124/124",
+    "typecheck": "passed",
+    "nativeMedia": "1/1",
+    "nativeBrowser": "1/1",
+    "storageRecoveryRuntimes": "not rerun; previous 3609d91 checkpoint has 16/16",
+    "consensusOnly": "not rerun"
+  },
+  "mediaLab": "zoom-storage-fdea9478",
+  "nativeMediaBodyMs": 60729.6719,
+  "nativeBrowserBodyMs": 4211.5138,
+  "sfuFaultThroughReceptionMs": 7078.0695,
+  "review": {
+    "independent": true,
+    "range": "5bf5067..c5e6ac4",
+    "critical": 0,
+    "important": 2,
+    "findings": [
+      "signaling success reset retry budget despite transport failure",
+      "pending playback blocked the supervisor single-flight and recovery"
+    ],
+    "disposition": "both reproduced RED then fixed GREEN; final default/typecheck/native suites passed",
+    "secondIndependentVerdict": false,
+    "deferredMinors": ["release-needs-review banner may persist after manual turn resolution or during a later display capture"],
+    "declinedToJudge": ["physical devices, audible playback, independent-host/TURN connectivity and deployment readiness"]
+  },
+  "preserved": [
+    "one shared ClientSession and journal",
+    "original durable command IDs and persisted uncertainty",
+    "unfiltered subscription revision zero",
+    "SQL schema and owner fences",
+    "runtime readiness and renewal values",
+    "SFU epoch/caller and local capture lease fences",
+    "domain retry jitter"
+  ],
+  "limits": [
+    "native camera/mic use Chromium fake devices; display uses a real selected browser tab",
+    "media-test runtimes share one host process; browsers and SFU are independent processes",
+    "audible playback and physical devices are unproved",
+    "browser toolbar Stop sharing, independent-host resilience, TURN and multi-device deployment unproved",
+    "snapshots only cancel local work; no continuous backend media-intention reconciler",
+    "failed teardown is uncertain; dependency failure does not prove existing RTP stopped",
+    "publication acknowledgement does not prove reception by another participant",
+    "committed subscription eligibility remains separate; revision zero is unfiltered"
+  ],
+  "artifacts": ["native.json", "default.txt", "typecheck.txt", "native.txt", "browser.txt", "desktop.png", "mobile.png"],
+  "visualVerification": "two bounded desktop/mobile inspection rounds, no overflow or visual repair"
+}

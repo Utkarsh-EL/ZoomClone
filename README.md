@@ -35,7 +35,7 @@ See [participant sessions](docs/client-sessions.md) for runtime/agent configurat
 | `npm test` | Current TypeScript backend, wire, discovery, engine and runtime adapter tests. |
 | `npm run typecheck` | TypeScript checks for current source, scripts and tests. |
 | `npm run test:browser` | Native Chromium UI controls, history/reload, shared CLI identity/pending work, uncertainty, share/leave and capture leases. |
-| `npm run test:media` | Production media routes, native two-browser capture, SQL/runtime/lease/epoch fences, SFU restart, directed takeover/isolation and shutdown drain; build its Docker image first. |
+| `npm run test:media` | Production media UI controls, native two-browser capture/playback, SQL/runtime/lease/epoch fences, supervised SFU restart, directed takeover/isolation, leave and shutdown drain; build its Docker image first. |
 | `npm run test:coordinator` | Raft dependency safety regressions, helper suite, vet, build and process scenario. |
 | `npm run test:consensus` | Additional dependency/helper race and process checks. |
 | `npm run test:storage` | Real PostgreSQL fencing, transactions, inspection and restart tests. |

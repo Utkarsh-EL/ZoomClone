@@ -32,7 +32,7 @@ Native investigation: first controller start hit a browser timer receiver error,
 
 Departure cleanup: SQL read authenticates the credential and checks current ACTIVE ownership before returning NOT_MEMBER. Only explicit closePeer may handle that specific refusal, using the previously admitted exact owner/epoch; no sync/publication is authorized from historical state. Unknown peers produce no effect, credential failures still reject, and failures retain cleanup state. Native leave plus shutdown verifies this path.
 
-Task 3: in progress. Independent read-only whole-increment review of 5bf5067..c5e6ac4 found no Critical and two Important defects, reproduced by the reviewer. No second reviewer or second verdict planned.
+Task 3: complete. Independent read-only whole-increment review of 5bf5067..c5e6ac4 found no Critical and two Important defects, reproduced by the reviewer and fixed in 6af610d. Final default 124/124, typecheck, native production media 1/1 (60.73s body, zoom-storage-fdea9478) and native participant UI 1/1 (4.21s body) passed. Evidence/transcripts/captures, guide, spec/status and handoff updated. No second reviewer or second verdict claimed. No new separate runtime/consensus-only rerun.
 
 Final: fixed signaling success resetting the recovery budget during actual transport failure — successful signaling cannot reset the retry budget when transport establishment fails; only connected required media transports reset the rebuild budget — RED→GREEN. Media health now requires connected send/receive transports when live publications/consumers require them; idle signaling alone does not erase failed transport establishment.
 
