@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "base": "5482a89",
+  "implementationHead": "5091488",
+  "increments": [
+    "e64be83: secured attachment service and capture leases",
+    "4e96e63: native browser, executable composition and shared CLI recovery",
+    "5091488: clock/socket review fixes and regressions"
+  ],
+  "verification": {
+    "npm test": { "passed": 65, "failed": 0, "attachmentTests": 9, "transcript": "unit-verification.txt" },
+    "npm run typecheck": "passed",
+    "npm run test:browser": { "passed": 1, "failed": 0, "browser": "native headless Google Chrome", "transcript": "browser-verification.txt" },
+    "npm run test:runtimes": { "passed": 16, "failed": 0, "storage": 7, "storageFaults": 4, "recovery": 2, "runtimeProcesses": 2, "participantProcesses": 1, "transcript": "runtime-verification.txt" },
+    "finalOwnedDockerLab": "zoom-storage-193ce937",
+    "previousOwnedDockerLab": "zoom-storage-3d5bbaba",
+    "finalParticipantScenarioMs": 8231.8055,
+    "nativeBrowserPermissions": "elevated sandbox execution needed for browser subprocesses and DevTools loopback listener",
+    "consensusOnlySuite": "not rerun; no Go/Raft changes"
+  },
+  "coverage": [
+    "Exact loopback Host and same-origin WebSocket Origin, including rejection of missing/null/foreign Origin and rebinding Host",
+    "Random 256-bit process-lifetime capability; fragment removed from URL and retained per tab across reload",
+    "Attachment authentication before shared session access; resume secrets absent from browser views",
+    "Socket-bound attachment ID/revision, pinned browser wire identity and increasing remote Lamport stamps",
+    "Explicit compare-and-set capture claim, replacement notification, stale release rejection and old-socket disconnect safety",
+    "One agent-owned listener shared by concurrent openBrowser callers; idempotent close, failed startup cleanup and capability rotation",
+    "Native Chrome reload and two tabs against an offline production participant agent with seeded durable inbox",
+    "Native browser and executable CLI retain one participant ID, one initial join, both pending command IDs and inbox events",
+    "Production attachment submission, reconnect and uncertain outcome view through real fenced storage",
+    "Recovered production browser and CLI command/event equality after participant restart and two runtime crashes",
+    "Unfiltered subscription revision zero retained; browser display positions do not advance network cursor",
+    "Admission, idle/auth deadlines, oversized/binary frame refusal and absolute partial-header deadline",
+    "All 128 pending command contents and a 16-event history page survive worst-case JSON escaping within 8 MiB local reply bound",
+    "Existing Raft metadata, SQL fencing, PostgreSQL restart/lock races, runtime readiness, discovery, quorum and retry jitter regressions retained"
+  ],
+  "review": {
+    "independentFindings": [
+      "Browser clock exhaustion could escape WebSocket callbacks; reproduced RED then fixed with pre-observation skew guard and safe reply/event containment",
+      "Rejected upgrade half-open sockets could delay agent shutdown; reproduced RED then fixed with raw socket tracking and destruction"
+    ],
+    "relatedRegression": "Continuing partial HTTP headers could refresh inactivity timeout forever; reproduced RED then fixed with absolute pre-upgrade deadline",
+    "status": "Reviewer returned two confirmed findings before final report was interrupted. Author completed the remaining protocol/lifecycle pass; no complete independent review verdict is claimed."
+  },
+  "limits": [
+    "Diagnostic browser page and reusable native adapter; full meeting UI, real capture/playback and SFU remain unfinished",
+    "Capture owner is a local logical lease; future media effects must honor this lease plus SQL grants and runtime/SFU fencing",
+    "Only unfiltered subscription revision zero; topics need committed-order eligibility",
+    "Native browser test uses seeded durable inbox with unavailable authority; real recovery is separately exercised by production attachment sockets in Docker suite",
+    "Runtime routes/incarnations remain provisioned and new incarnations require configuration refresh and same-journal restart",
+    "Private local credentials are plaintext under filesystem permissions; attachment startup URL/stdout is a private capability",
+    "No browser automatic resubmission after a lost acknowledgement; inspect shared durable commands to resolve uncertainty",
+    "Literal loopback only; no public-network, whole-machine/disk-failure or actual media-availability claim",
+    "Disconnect grace, long-term journal garbage collection, supervisor/dashboard and complete proxy/network deployment remain unfinished"
+  ]
+}

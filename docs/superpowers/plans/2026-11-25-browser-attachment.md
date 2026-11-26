@@ -50,7 +50,7 @@ Interfaces: optional browser configuration on ParticipantAgentConfig; agent.open
 
 - [x] Run npm test, npm run typecheck and npm run test:runtimes; inspect outputs.
 - [x] Obtain a fresh whole-change review, fix important findings with regressions and rerun affected checks. Review returned two confirmed findings before its final report was interrupted; author completed the remaining pass.
-- [ ] Update docs/client-sessions.md, current spec, handoff and evidence; commit.
+- [x] Update docs/client-sessions.md, current spec, handoff and evidence; commit.
 
 ## Execution ledger
 
@@ -63,3 +63,4 @@ Interfaces: optional browser configuration on ParticipantAgentConfig; agent.open
 - Final review: independent reviewer reproduced browser clock exhaustion and rejected-upgrade shutdown retention. Both were verified RED→GREEN and fixed. The reviewer did not deliver a final full assessment; author completed a final lifecycle/protocol pass. No other findings are claimed from that review.
 - Final fixes: reject browser Lamport jumps more than 1024 ahead before shared-clock observation; contain reply/event failure. Destroy rejected upgrades after response flush, track every raw TCP socket through shutdown and enforce an absolute pre-upgrade deadline. Regression tests cover all three paths and an 8 MiB reply with 128 command records/16 escaped events. One raw-socket test initially treated an expected ECONNRESET as failure; it now waits for close directly.
 - Final verification: npm test 65/65; attachment 9/9; typecheck passed; native Chrome 1/1; repeated real runtime suite 16/16. Production Raft/SQL/readiness/retry paths were not modified.
+- Task 3 complete: fixes committed in 5091488; final lab zoom-storage-193ce937; checked transcripts and limits in evidence/browser_attachment_run/result.json. Documentation relative links, JSON parse and diff whitespace passed. Handoff names the exact UI integration continuation; branch remains milestone-5 as requested.

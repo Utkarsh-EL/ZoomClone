@@ -1,0 +1,12 @@
+npm notice run test:browser
+npm notice run node --test tests/browser-native.test.ts
+{"browser":"C:/Program Files/Google/Chrome/Application/chrome.exe","checks":["native WebSocket","reload","CLI identity","pending IDs","durable inbox","capture replacement","shutdown"],"participantId":"96ecf586-072c-4118-895d-2cf77da33e47"}
+✔ native browser reload and CLI retain one identity, pending IDs, inbox and fenced capture (1198.4202ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1381.8222

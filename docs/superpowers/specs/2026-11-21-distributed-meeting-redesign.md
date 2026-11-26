@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md), [headless ownership activation](../../ownership-activation.md), [authenticated loopback runtimes with renewal scheduling](../../remote-runtimes.md), [128-bit discovery](../../chord-discovery.md) and [durable ClientSession/production participant replay](../../client-sessions.md) implemented on `milestone-5`. Secured browser attachment, GUI/media, subscriptions and broader deployment remain integration work. The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md), [headless ownership activation](../../ownership-activation.md), [authenticated loopback runtimes with renewal scheduling](../../remote-runtimes.md), [128-bit discovery](../../chord-discovery.md) and [durable ClientSession/production participant replay with secured browser attachment](../../client-sessions.md) implemented on `milestone-5`. Full GUI/media, subscriptions and broader deployment remain integration work. The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 
@@ -61,7 +61,7 @@ The original root application, 16-bit overlay, TCP participant protocol, ring el
 
 - `coordination/logical-clock.ts` retains the reused Lamport clock; `coordination/wire.ts` supplies the authenticated stamped control envelope. The original protocol/framing API has been removed.
 - `coordination/` owns discovery, helper routing, ownership recovery and runtime lifecycle. `services/coordinator/` and the repaired Raft dependency own durable coordinator metadata.
-- `storage/` owns durable meeting commands, identities/verifiers, outcomes, events, snapshot reads and SQL fencing. `client/` owns the durable participant journal/session and runtime WebSocket transport; the runtime participant gateway delegates every command/read to existing readiness and SQL fences. Browser attachment and subscription revisions remain unfinished.
+- `storage/` owns durable meeting commands, identities/verifiers, outcomes, events, snapshot reads and SQL fencing. `client/` owns the durable participant journal/session, runtime WebSocket transport and secured loopback browser adapter; the runtime participant gateway delegates every command/read to existing readiness and SQL fences. Browser attachment/capture revisions are local; committed subscription revisions remain unfinished.
 - SFU media must replace the retired still-frame demonstration. Historical design/evidence records do not establish current media or participant guarantees.
 - `docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md` is historical context, not another current specification.
 
