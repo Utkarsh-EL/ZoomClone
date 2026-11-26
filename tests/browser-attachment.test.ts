@@ -64,6 +64,13 @@ test("attachment requires exact Host/Origin, token and protocol before exposing 
   const f = await fixture();
   try {
     assert.equal(await httpStatus(f.server.origin + "/"), 200);
+    for (const [path, type] of [["/participant.css", "text/css"], ["/participant-model.js", "text/javascript"], ["/bootstrap.js", "text/javascript"]]) {
+      const asset = await fetch(f.server.origin + path);
+      assert.equal(asset.status, 200); assert.match(asset.headers.get("content-type")!, new RegExp(type));
+      assert.match(asset.headers.get("content-security-policy")!, /style-src 'self'/);
+      assert.equal((await asset.text()).includes(f.token), false);
+    }
+    assert.equal(await httpStatus(f.server.origin + "/../session.sqlite"), 404);
     assert.equal(await httpStatus(f.server.origin + "/", { Host: "evil.example" }), 403);
     assert.equal(await httpStatus(f.server.origin + "/", { Origin: "null" }), 403);
     for (const headers of [{}, { Origin: "null" }, { Origin: "https://evil.example" }, { Origin: f.server.origin, Host: "evil.example" }] as Record<string, string>[]) {

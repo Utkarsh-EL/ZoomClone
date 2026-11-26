@@ -25,13 +25,15 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   if (wire.identity.clusterId !== view.clusterId || wire.identity.nodeId !== view.participantId) throw new Error("ATTACHMENT_WIRE_MISMATCH");
   const token = randomBytes(32).toString("base64url"), expected = Buffer.from(token);
   // Assets are fixed at startup; no filesystem path is derived from a request.
-  const assets = new Map<string, { type: string; text: string }>([
-    ["/", { type: "text/html; charset=utf-8", text: '<!doctype html><meta charset="utf-8"><title>Participant attachment</title><h1>Participant attachment</h1><pre id="status">Connecting</pre><script type="module" src="/bootstrap.js"></script>' }],
-  ]);
-  for (const [path, file] of [["/attachment.js", "browser-attachment.js"], ["/bootstrap.js", "browser-bootstrap.js"]]) {
+  const assets = new Map<string, { type: string; text: string }>();
+  for (const [path, file, type] of [
+    ["/", "participant.html", "text/html"], ["/participant.css", "participant.css", "text/css"],
+    ["/attachment.js", "browser-attachment.js", "text/javascript"], ["/bootstrap.js", "browser-bootstrap.js", "text/javascript"],
+    ["/participant-model.js", "participant-model.js", "text/javascript"],
+  ]) {
     // The protocol-only service can also be used without the optional page adapter.
     const text = await readFile(new URL(file, import.meta.url), "utf8").catch(error => { if (error.code !== "ENOENT") throw error; return ""; });
-    assets.set(path, { type: "text/javascript; charset=utf-8", text });
+    assets.set(path, { type: `${type}; charset=utf-8`, text });
   }
   let origin = "", host = "", closing = false, revision = 0;
   let capture: CaptureLease = { revision: 0, owner: null };
@@ -54,7 +56,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   }
   const server = createServer((request, response) => {
     const headers = { "Connection": "close", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" };
+      "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" };
     if (request.headers.host !== host || (request.headers.origin !== undefined && request.headers.origin !== origin)) {
       response.writeHead(403, headers).end(); return;
     }

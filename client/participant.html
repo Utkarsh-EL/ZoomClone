@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meeting · Participant</title>
+  <link rel="stylesheet" href="/participant.css">
+  <script type="module" src="/bootstrap.js"></script>
+</head>
+<body>
+  <a class="skip" href="#chat-input">Skip to message</a>
+  <header class="meeting-header">
+    <div><h1 id="meeting-title">Meeting</h1><p id="identity">Attaching to your participant session…</p></div>
+    <button id="leave" disabled>Leave meeting</button>
+  </header>
+  <div class="connection-bar" role="status">
+    <span>Local agent: <strong id="attachment-status">connecting</strong></span>
+    <span>Meeting: <strong id="session-status">connecting</strong></span>
+    <button id="reattach" hidden>Reload to reattach</button>
+  </div>
+  <main>
+    <div class="notice" id="error" role="alert" hidden></div>
+    <section class="notice" id="uncertainty" hidden aria-labelledby="uncertainty-title">
+      <h2 id="uncertainty-title">Submission outcome needs review</h2>
+      <p>The reply was interrupted. Your operation may already be saved with its original ID. Review the commands below, including their contents and pending outcomes, before submitting again.</p>
+      <a href="#command-section">Review commands</a><button id="reviewed">I reviewed the commands</button>
+    </section>
+    <section class="notice" id="leave-confirm" hidden aria-labelledby="leave-title">
+      <h2 id="leave-title">Leave this meeting?</h2>
+      <p>This queues a durable leave for your shared browser and CLI participant. Closing this tab only detaches it.</p>
+      <button id="leave-submit" class="danger">Confirm leave</button><button id="leave-cancel">Stay in meeting</button>
+    </section>
+    <div class="workspace">
+      <section class="conversation" aria-labelledby="conversation-title">
+        <div class="section-heading"><h2 id="conversation-title">Conversation</h2><span class="muted">All meeting events</span></div>
+        <nav class="history-tools" aria-label="History pages">
+          <button id="older" disabled>Older</button><button id="newer" disabled>Newer</button><button id="latest" disabled>Latest</button>
+          <span id="page-status" class="muted" role="status">Loading retained history…</span>
+        </nav>
+        <ol id="history" aria-label="Meeting history" tabindex="0"><li class="empty">Loading your retained inbox…</li></ol>
+        <form id="chat-form">
+          <label for="chat-input">Message the meeting</label>
+          <textarea id="chat-input" rows="3" placeholder="Write a message…" aria-describedby="composer-help" disabled></textarea>
+          <div class="composer-footer"><span id="composer-help" class="muted">Messages are saved by your agent before delivery.</span><button type="submit" id="send" class="primary" disabled>Send message</button></div>
+        </form>
+      </section>
+      <aside aria-label="Participants and sharing">
+        <section aria-labelledby="roster-title"><div class="section-heading"><h2 id="roster-title">Participants</h2><span id="roster-count" class="muted"></span></div><ul id="roster"><li class="empty">Waiting for a meeting snapshot.</li></ul></section>
+        <section aria-labelledby="share-title">
+          <h2 id="share-title">Screen-share queue</h2><p id="share-status">Waiting for a meeting snapshot.</p>
+          <ol id="share-queue" aria-label="Screen-share waiting list"></ol>
+          <div class="actions"><button id="share-request" disabled>Request share turn</button><button id="share-release" disabled hidden>Release share turn</button></div>
+          <p class="muted small">A turn is a logical grant. Screen capture and media transport are not connected yet.</p>
+        </section>
+        <section aria-labelledby="capture-title">
+          <h2 id="capture-title">Local capture owner</h2><p id="capture-status">No browser owns capture.</p>
+          <div class="actions"><button id="capture-claim" disabled>Claim for this tab</button><button id="capture-release" disabled hidden>Release local ownership</button></div>
+          <p class="muted small">One tab per agent can hold this lease. Claiming it does not open a camera, microphone or screen.</p>
+        </section>
+      </aside>
+    </div>
+    <section id="command-section" class="command-section" aria-labelledby="command-title">
+      <div class="section-heading"><h2 id="command-title">Pending and outcomes</h2><span id="command-status" class="muted" role="status">Loading…</span></div>
+      <p class="muted small">Recent 128 commands shared with your CLI. Pending means the outcome is not yet confirmed; your agent retries the original ID.</p>
+      <ol id="commands" aria-label="Shared participant commands"></ol>
+    </section>
+    <footer><p id="snapshot-status">No meeting snapshot yet.</p><details><summary>Session details</summary><dl id="session-details"></dl></details></footer>
+  </main>
+</body>
+</html>
