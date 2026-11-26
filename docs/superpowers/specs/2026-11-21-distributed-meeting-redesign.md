@@ -57,17 +57,15 @@ Accounts, scheduling, recording, breakout rooms, seamless SFU failover, database
 
 ## 3. Existing work and migration boundaries
 
-The original review identified these reuse candidates and boundaries; verify them against current code when planning implementation:
+The original root application, 16-bit overlay, TCP participant protocol, ring election/file locks, still-frame media and their exclusive tests/demos have been retired to Git history. Their behavior is not a compatibility requirement.
 
-- protocol.ts: framed JSON, validation, logging, and LamportClock are reuse candidates. Application control envelopes need consistently required logical timestamps.
-- client.ts: Participant provides behavioral reference material. Discovery coupling, reconnect, and command-boundary errors need attention.
-- server.ts: separate durable meeting state from transient sockets, transports, and in-memory fanout.
-- peer.ts: separate overlay, coordination, meeting hosting, resource policy, and lifecycle responsibilities. Replace ring election and timeout-only lock recovery.
-- video.ts and video.html: replace still-image relay with real SFU media. The previously alleged event-stream issue was withdrawn; do not resurrect it as a confirmed bug.
-- Preserve existing tests/demos as references. Old placement, election, and still-frame assertions do not prove the new guarantees.
-- docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md is historical context, not another current specification.
+- `coordination/logical-clock.ts` retains the reused Lamport clock; `coordination/wire.ts` supplies the authenticated stamped control envelope. The original protocol/framing API has been removed.
+- `coordination/` owns discovery, helper routing, ownership recovery and runtime lifecycle. `services/coordinator/` and the repaired Raft dependency own durable coordinator metadata.
+- `storage/` owns durable meeting commands, identities/verifiers, outcomes, events, snapshot reads and SQL fencing. Production participant transport and durable ClientSession still need implementation.
+- SFU media must replace the retired still-frame demonstration. Historical design/evidence records do not establish current media or participant guarantees.
+- `docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md` is historical context, not another current specification.
 
-A fresh planning thread should inspect the repository before deciding exact file layout. This design revision does not assert that the application already implements these boundaries.
+Inspect the current modules before implementation. Preserve the new safety boundaries while completing the remaining product.
 
 ## 4. Roles and interfaces
 

@@ -1,6 +1,6 @@
 # Chord discovery checkpoint
 
-The new backend has a focused Chord discovery service. It uses SHA-256 truncated to 128 bits over a versioned cluster/namespace/name tuple, bigint arithmetic internally, and exactly 32 lowercase hexadecimal digits on the wire. The legacy `peer.ts` application is separate and still uses its original numeric IDs; the new backend does not import it.
+The backend has a focused Chord discovery service. It uses SHA-256 truncated to 128 bits over a versioned cluster/namespace/name tuple, bigint arithmetic internally, and exactly 32 lowercase hexadecimal digits on the wire. The original 16-bit overlay and combined application have been retired to Git history.
 
 `DiscoveryNode` maintains a predecessor, four successors and 128 fingers. Iterative lookups try preceding fingers and successor fallbacks, detect revisits, and stop after 32 hops, 64 remote attempts, or the shared deadline (default 1500 ms). Each attempt also has a deadline of at most 250 ms, leaving time for other bootstrap/fallback routes. Maintenance repairs eight fingers per tick by default. It retains at most 32 contact addresses, rotates failed contacts, refreshes process incarnations through authenticated status, and probes contacts even with healthy successors so surviving subrings can merge after healing. A peer that has observed another member refuses to invent singleton routing when isolated.
 

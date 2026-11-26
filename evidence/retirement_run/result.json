@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-25",
+  "checkpoint": "retire original application and extract the reused logical clock",
+  "verification": [
+    { "command": "npm test", "passed": 41, "failed": 0 },
+    { "command": "npm run typecheck", "result": "passed" },
+    {
+      "command": "npm run test:runtimes",
+      "lab": "zoom-storage-d20cb592",
+      "storageTestsPassed": 7,
+      "storageFaultTestsPassed": 4,
+      "recoveryTestsPassed": 2,
+      "runtimeProcessTestsPassed": 2,
+      "failed": 0
+    }
+  ],
+  "retired": [
+    "Original root TCP participant/server/protocol, 16-bit overlay and ring-election/file-lock implementation",
+    "Original still-frame video page/relay and old demonstration entry points",
+    "Tests and npm commands exclusively exercising the retired application",
+    "Obsolete original-overlay and coordination operational guides"
+  ],
+  "preserved": [
+    "LamportClock implementation and behavior regression, relocated into the current backend",
+    "All current coordinator, storage, discovery, engine, runtime and recovery checks",
+    "Root package, TypeScript, Compose, environment and Git configuration",
+    "Historical checkpoint evidence and design records; retired executable milestones remain available in Git history"
+  ],
+  "testCountChange": "95 to 41: 54 legacy-only cases retired; the reused logical clock regression remains",
+  "limits": [
+    "Production participant transport, durable ClientSession, UI and SFU remain unfinished",
+    "No Raft helper, SQL fencing or runtime readiness protocol changes",
+    "Consensus-only dependency suites were not rerun for this source relocation and legacy retirement"
+  ]
+}

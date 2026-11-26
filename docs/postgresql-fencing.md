@@ -1,6 +1,6 @@
 # PostgreSQL fencing checkpoint
 
-Docker is working. This `milestone-5` batch implements and tests the storage boundary in the [current redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md). Its separate tests use explicit ownership assignments. The later [ownership activation checkpoint](ownership-activation.md) integrates this boundary with a headless Raft-to-SQL controller; the original participant application remains separate.
+Docker is working. This `milestone-5` batch implements and tests the storage boundary in the [current redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md). Its separate tests use explicit ownership assignments. The later [ownership activation checkpoint](ownership-activation.md) integrates this boundary with a headless Raft-to-SQL controller. The original participant application has been retired; the production participant protocol remains unfinished.
 
 The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced dependency failures and adds live partition and durable snapshot crash tests. The ownership checkpoint adds resumable activation and failure evidence; a committed candidate alone still grants no SQL authority.
 
@@ -53,7 +53,7 @@ Controller calls are trusted in-process operations. They must eventually be auth
 
 ## Durable commands and screen-share handoff
 
-The engine supports join, meeting-wide chat, request/release screen share, and leave. At most 128 participants are joined concurrently. Departed identities remain for authentication/rejoin but do not consume live capacity; returning participants also obey the limit. Chat content is bounded to 8 KiB and names to 200 UTF-8 bytes. The existing pub/sub demo remains separate; topics/subscription revisions are not migrated yet.
+The engine supports join, meeting-wide chat, request/release screen share, and leave. At most 128 participants are joined concurrently. Departed identities remain for authentication/rejoin but do not consume live capacity; returning participants also obey the limit. Chat content is bounded to 8 KiB and names to 200 UTF-8 bytes. The original pub/sub demo has been retired; durable topics/subscription revisions are not implemented yet.
 
 Participants supply a stable UUID and a 256-bit resume secret represented as 64 lowercase hex characters. Only its SHA-256 verifier is stored, in a credential table excluded from inspection. Display names do not authenticate identity. Client-side persistence and transport authentication are later work; these are direct store tests, not an implemented participant reconnect protocol.
 

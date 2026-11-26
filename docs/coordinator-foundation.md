@@ -1,8 +1,8 @@
 # Durable coordinator checkpoint
 
-This is the first implemented checkpoint of the [distributed meeting redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md), on `milestone-5`. The milestone-4 application and its demos still run separately. The new helper is not yet wired into `peer.ts` and does not authorize meeting access.
+This documents the first implemented checkpoint of the [distributed meeting redesign](superpowers/specs/2026-11-21-distributed-meeting-redesign.md), on `milestone-5`. The original milestone-4 application and demos have since been retired to Git history. Coordinator metadata alone does not authorize meeting access.
 
-The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced upstream log/snapshot failures with a reviewed local dependency patch and always-enabled regressions. The later [ownership activation checkpoint](ownership-activation.md) connects committed assignments to the [PostgreSQL fence](postgresql-fencing.md) through a headless controller. Original demos remain separate; remote runtime deployment is still in progress.
+The [consensus repair checkpoint](consensus-safety.md) addresses the three reproduced upstream log/snapshot failures with a reviewed local dependency patch and always-enabled regressions. The later [ownership activation checkpoint](ownership-activation.md) connects committed assignments to the [PostgreSQL fence](postgresql-fencing.md) through a headless controller. [Authenticated runtimes](remote-runtimes.md) and [discovery](chord-discovery.md) are implemented; production participant integration remains unfinished.
 
 ## Run the evidence
 

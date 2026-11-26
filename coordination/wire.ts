@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { LamportClock } from "../protocol.ts";
+import { LamportClock } from "./logical-clock.ts";
 
 export const MAX_ENVELOPE_BYTES = 1024 * 1024;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

@@ -1,6 +1,6 @@
 # Remote runtime checkpoint
 
-Meeting runtimes now run independently of the coordinator worker. Authenticated loopback adapters implement `Candidate.prepare`; a background runtime agent registers its incarnation, discovers its READY assignments and schedules fenced renewals. The existing Raft-to-PostgreSQL activation protocol is unchanged. Original participant/peer/video demos remain separate.
+Meeting runtimes now run independently of the coordinator worker. Authenticated loopback adapters implement `Candidate.prepare`; a background runtime agent registers its incarnation, discovers its READY assignments and schedules fenced renewals. The existing Raft-to-PostgreSQL activation protocol is unchanged. The original application/demos have been retired to Git history; the production participant protocol remains unfinished.
 
 ## Run the checks
 

@@ -1,90 +1,52 @@
 # ZoomClone
 
-A local distributed meeting project being redesigned around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. The new backend is headless; durable participant sessions, the production participant protocol and media/UI integration remain unfinished.
+A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. The backend is headless. Durable participant sessions, the production participant protocol, and media/UI integration remain unfinished.
 
-Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md), [runtime guide](docs/remote-runtimes.md) and [new discovery service](docs/chord-discovery.md). `npm run start:discovery` runs a configured discovery peer; runtimes can use its service hints to find authenticated Raft helpers. New backend checks require installed npm dependencies, Go and Docker as documented in those guides. The original application commands below are legacy demonstrations and may be replaced during implementation.
+Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md) for implemented behavior, evidence, limitations, and the exact next action. The [current design](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) describes the intended product.
 
 ## Setup
 
-Requirements: Node.js 24.16 or newer and npm.
+Install Node.js 24.16 or newer, npm dependencies, Go 1.26 or newer for coordinator helpers, and Docker Desktop for PostgreSQL integration checks.
 
 ```sh
-git clone https://github.com/Utkarsh-EL/ZoomClone.git
-cd ZoomClone
-```
-
-For Linux systems
-```
 npm install
+npm run build:coordinator
+npm test
+npm run typecheck
 ```
 
-For windows systems
-```
-winget install OpenJS.NodeJS.LTS
-```
+TypeScript entry points use Node's built-in TypeScript support. PostgreSQL provisioning and credentials are documented in the storage and runtime guides; see `.env.example` and `compose.yaml`.
 
-Run `npm install` for the PostgreSQL driver and development tools. TypeScript entry points use Node's built-in TypeScript support.
+## Backend entry points
 
-## Legacy meeting service
+| Command | Purpose |
+| --- | --- |
+| `npm run start:discovery` | Run a configured discovery peer using protected `ZOOM_DISCOVERY_CONFIG` JSON. |
+| `node scripts/meeting-runtime.ts` | Run a configured meeting runtime using protected `ZOOM_RUNTIME_CONFIG` JSON. |
+| `npm run demo:coordinator` | Run the checked Raft coordinator process scenario. |
 
-### Start a local peer network
+There is no participant-facing application yet. The retired TCP participant/server, 16-bit overlay, ring election/file locks, still-frame video page and their demos are available in Git history before the legacy retirement commit. They are not alternative application entry points.
 
-Open a terminal in the project folder for each peer. The first peer creates the ring; the others join through it:
+## Verification
 
-```sh
-node peer.ts --name alpha --port 7001
-node peer.ts --name sierra --port 7002 --bootstrap 127.0.0.1:7001
-node peer.ts --name ora --port 7003 --bootstrap 127.0.0.1:7001
-```
+| Command | Coverage |
+| --- | --- |
+| `npm test` | Current TypeScript backend, wire, discovery, engine and runtime adapter tests. |
+| `npm run typecheck` | TypeScript checks for current source, scripts and tests. |
+| `npm run test:coordinator` | Raft dependency safety regressions, helper suite, vet, build and process scenario. |
+| `npm run test:consensus` | Additional dependency/helper race and process checks. |
+| `npm run test:storage` | Real PostgreSQL fencing, transactions, inspection and restart tests. |
+| `npm run test:recovery` | Storage checks plus crash/lost-reply ownership recovery. |
+| `npm run test:runtimes` | Storage/recovery checks plus independent runtimes consuming discovered helper routes and surviving failures. |
 
-At `sierra`, host a meeting. At any peer, look it up by name:
+## Current implementation guides
 
-```text
-host demo-room
-lookup demo-room
-```
+- [Coordinator foundation](docs/coordinator-foundation.md)
+- [Raft consensus repair and provenance](docs/consensus-safety.md)
+- [PostgreSQL durability and fencing](docs/postgresql-fencing.md)
+- [Ownership activation and recovery](docs/ownership-activation.md)
+- [Authenticated runtimes and renewal](docs/remote-runtimes.md)
+- [128-bit Chord discovery and helper routing](docs/chord-discovery.md)
+- [Assignment requirements](docs/assignment-reqs.txt)
 
-### Join from a terminal client
-
-Start a client in another terminal. `--via` can point to any peer in the ring:
-
-```sh
-node client.ts --name alice --meeting demo-room --via 127.0.0.1:7001
-```
-
-Use `members`, `say Hello`, and `quit` in the client. For the direct Milestone 2 service, start `node server.ts --host 127.0.0.1 --port 5000`, then connect with `node client.ts --name alice --meeting demo-room --port 5000`.
-
-### Share video in a browser
-
-Start peers with an HTTP page port (use `--http` on each peer), host the meeting at one peer, and open that peer's local page:
-
-```sh
-node peer.ts --name alpha --port 7001 --http 8001
-node peer.ts --name sierra --port 7002 --http 8002 --bootstrap 127.0.0.1:7001
-```
-
-Type `host demo-room` at `alpha`, then open `http://127.0.0.1:8001/` and `http://127.0.0.1:8002/`. Press **Join** and choose camera, screen, or test-pattern sharing. The prototype relays still image frames and has no audio.
-
-## Try the demos
-
-Each script starts its own peers, runs a checked scenario, and writes logs under `evidence/`:
-
-```sh
-node p2p_demo.ts       # discovery, joining, lookup, and recovery
-node coord_demo.ts     # leader election, locked writes, and failover
-node video_demo.ts     # presenter ordering and video failover
-```
-
-These legacy scripts complement the hands-on commands above. Run the default automated tests with `npm test`, type-check with `npm run typecheck`, and run the real Raft/PostgreSQL discovery/runtime integration with `npm run test:runtimes`.
-
-## Project guides
-
-- [Peer-to-peer overlay](docs/peer-to-peer-overlay.md): ring behavior, manual peer commands, protocol, tests, and limitations.
-- [Coordination and video sharing](docs/coordination.md): Lamport clocks, leader election, locks, video presentation, demos, tests, and limitations.
-- [Durable coordinator checkpoint](docs/coordinator-foundation.md): the first `milestone-5` redesign batch, with real Raft helpers, persistent metadata, crash/restart evidence, and current limits. Run `npm run test:coordinator` or `npm run demo:coordinator` with Go 1.26+ installed.
-- [Consensus repair checkpoint](docs/consensus-safety.md): an auditable local Raft dependency repair, always-enabled regressions, live partition and snapshot-publication crash tests. Run `npm run test:consensus` for the full race/process checks.
-- [PostgreSQL fencing checkpoint](docs/postgresql-fencing.md): persistent Compose storage, fenced commands, atomic screen-share handoff, bounded read-only inspection and real pause/restart tests. Run `npm run test:storage` with Docker Desktop running.
-- [Ownership activation checkpoint](docs/ownership-activation.md): resumable Raft-to-SQL activation, runtime readiness, headless reconciliation and conditional failure suspicion. Run `npm run test:recovery` for real helper/PostgreSQL crash and lost-reply checks.
-- [Remote runtime checkpoint](docs/remote-runtimes.md): authenticated preparation adapters, guarded registration, scheduled renewals and independent-process takeover. Run `npm run test:runtimes` for the full helper/PostgreSQL/runtime checks. Discovery and participant migration remain in progress.
-- [Current redesign](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) and [implementation plan](docs/superpowers/plans/2026-11-25-coordinator-foundation.md): shared PostgreSQL, replaceable meeting runtimes, and real SFU media. These are not yet the application running above.
-- [Historical video MVP design](docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md): superseded architecture notes.
+Checkpoint evidence under `evidence/` records the code and checks at each checkpoint. Older milestone evidence and superseded design records are historical; they do not establish the current backend's guarantees.

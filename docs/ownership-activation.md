@@ -1,6 +1,6 @@
 # Ownership activation checkpoint
 
-The `milestone-5` redesign now connects committed Raft candidate assignments to PostgreSQL fences through a headless reconciliation library. The original participant/peer/video demos still run separately. This checkpoint is not a deployed meeting service.
+The `milestone-5` redesign connects committed Raft candidate assignments to PostgreSQL fences through a headless reconciliation library. The original participant/peer/video demos have been retired to Git history. This checkpoint is not a deployed meeting service.
 
 Run with Node.js 24.16+, installed npm dependencies, Go 1.26+ and Docker Desktop:
 
