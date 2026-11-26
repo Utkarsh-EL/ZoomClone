@@ -37,3 +37,18 @@ test('supervision is single-flight and pending leave synchronously stops capture
   assert.equal(f.controller.enabled, false); assert.equal(f.revoked(), 1);
   finish(); await opening; assert.equal(f.subscriptions(), 0); f.controller.dispose();
 });
+test('successful signaling cannot reset the retry budget when transport establishment fails', async () => {
+  const f = fixture(); let opens = 0;
+  f.media.reconnect = async () => { opens++; f.media.state = 'ready'; };
+  f.media.subscribe = async () => { f.media.state = 'unavailable'; };
+  f.media.healthy = false;
+  await f.controller.enable();
+  for (let i = 0; i < 5; i++) await f.controller.tick();
+  assert.equal(opens, 3); assert.equal(f.controller.exhausted, true); f.controller.dispose();
+});
+test('only connected required media transports reset the rebuild budget', async () => {
+  const f = fixture(); f.media.reconnect = async () => { f.media.state = 'ready'; };
+  f.media.healthy = false; await f.controller.enable(); assert.equal(f.controller.attempts, 1);
+  await f.controller.tick(); assert.equal(f.controller.attempts, 1);
+  f.media.healthy = true; await f.controller.tick(); assert.equal(f.controller.attempts, 0); f.controller.dispose();
+});

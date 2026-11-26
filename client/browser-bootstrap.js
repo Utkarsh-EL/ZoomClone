@@ -129,7 +129,7 @@ try {
     }
     $('media-release-review').hidden = !capture.releaseNeedsReview;
     text('playback-status', `Remote playback ${media.playback} · ${media.consumers.size} received sources.`);
-    text('media-play', media.playback === 'playing' ? 'Mute playback' : 'Play with sound');
+    text('media-play', ['playing', 'starting'].includes(media.playback) ? 'Mute playback' : 'Play with sound');
     $('media-play').disabled = !media.consumers.size;
     $('media-error').hidden = !controller.error; text('media-error', controller.error);
   }
@@ -169,7 +169,7 @@ try {
         if (media.capture.tracks.has(source) || media.capture.pending.has(source)) void participantMedia.stop(source);
         else void participantMedia.start(source);
       });
-      $('media-play').addEventListener('click', () => { if (media.playback === 'playing') media.mute(); else void media.play(); });
+      $('media-play').addEventListener('click', () => { if (['playing', 'starting'].includes(media.playback)) media.mute(); else media.play(); });
       renderMedia();
     }
   }

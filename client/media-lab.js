@@ -11,6 +11,8 @@ export class MediaLab extends EventTarget {
   #revision = 0;
   #openTail = Promise.resolve();
   #subscribing;
+  #playRevision = 0;
+  #sound = false;
   constructor(attachment, { Device: DeviceClass = Device, release, container } = {}) {
     super(); this.Device = DeviceClass; this.container = container;
     this.attachment = attachment;
@@ -21,6 +23,11 @@ export class MediaLab extends EventTarget {
   setState(state) { this.state = state; this.changed(); }
   current(revision) { return revision === this.#revision && this.attachment.readyState !== 'closed'; }
   check(revision) { if (!this.current(revision)) throw new Error('MEDIA_CANCELED'); }
+  get healthy() {
+    return this.state === 'ready'
+      && (!(this.capture.tracks.size || this.producers.size) || this.send?.connectionState === 'connected')
+      && (!this.consumers.size || this.recv?.connectionState === 'connected');
+  }
   async call(request, opening = false, revision = this.#revision, epoch = this.epoch) {
     const retryUntil = performance.now() + 4000;
     for (let attempt = 0; ; attempt++) {
@@ -53,6 +60,7 @@ export class MediaLab extends EventTarget {
     this.#openTail = work.catch(() => {}); return work;
   }
   #disposeTransports() {
+    this.#playRevision++; this.playback = this.#sound ? 'starting' : 'muted';
     this.send?.close(); this.recv?.close();
     for (const consumer of this.consumers.values()) { consumer.close(); consumer.element?.remove(); }
     this.consumers.clear(); this.producers.clear(); this.send = null; this.recv = null; this.#subscribing = null;
@@ -115,24 +123,34 @@ export class MediaLab extends EventTarget {
       const consumer = await recv.consume(options);
       if (!this.current(revision)) { consumer.close(); throw new Error('MEDIA_CANCELED'); } consumer.source = producer.source;
       const element = document.createElement(consumer.kind === 'video' ? 'video' : 'audio');
-      element.autoplay = true; element.muted = this.playback !== 'playing'; element.playsInline = true; element.controls = consumer.kind === 'video'; element.setAttribute('aria-label', `Remote ${producer.source}`);
+      element.autoplay = true; element.muted = !this.#sound; element.playsInline = true; element.controls = consumer.kind === 'video'; element.setAttribute('aria-label', `Remote ${producer.source}`);
       element.srcObject = new MediaStream([consumer.track]); (this.container ?? document.body).append(element);
       consumer.element = element; this.consumers.set(producer.id, consumer);
       await this.call({ action: 'resume', consumerId: consumer.id }, false, revision);
-      try { await element.play(); } catch { if (this.current(revision)) this.playback = 'blocked'; }
+      void this.#playElement(element);
       this.check(revision);
     }
     for (const [id, consumer] of this.consumers) if (!producers.some(p => p.id === id)) { consumer.close(); consumer.element.remove(); this.consumers.delete(id); }
     this.changed(); return producers;
   }
-  async play() {
-    const revision = this.#revision; this.playback = 'playing';
-    await Promise.all([...this.consumers.values()].map(async consumer => {
-      consumer.element.muted = false;
-      try { await consumer.element.play(); } catch { if (this.current(revision)) this.playback = 'blocked'; }
-    })); this.changed();
+  #playElement(element) {
+    const revision = this.#revision, intent = this.#playRevision;
+    let playback;
+    try { playback = element.play(); } catch (error) { playback = Promise.reject(error); }
+    return Promise.resolve(playback).then(() => {
+      if (this.current(revision) && intent === this.#playRevision && this.#sound && this.playback !== 'blocked') { this.playback = 'playing'; this.changed(); }
+      return true;
+    }, () => {
+      if (this.current(revision) && intent === this.#playRevision) { this.playback = 'blocked'; this.changed(); }
+      return false;
+    });
   }
-  mute() { this.playback = 'muted'; for (const consumer of this.consumers.values()) consumer.element.muted = true; this.changed(); }
+  play() {
+    this.#playRevision++; this.#sound = true; this.playback = 'starting';
+    for (const consumer of this.consumers.values()) { consumer.element.muted = false; void this.#playElement(consumer.element); }
+    this.changed();
+  }
+  mute() { this.#playRevision++; this.#sound = false; this.playback = 'muted'; for (const consumer of this.consumers.values()) consumer.element.muted = true; this.changed(); }
   async stats() {
     const values = [];
     for (const consumer of this.consumers.values()) {

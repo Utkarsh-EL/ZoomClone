@@ -42,7 +42,7 @@ export class ParticipantMedia extends EventTarget {
       if (!this.enabled || !this.eligible) return;
       await this.media.subscribe();
       if (!this.enabled || !this.eligible) return;
-      this.attempts = 0; this.error = '';
+      if (this.media.healthy) { this.attempts = 0; this.error = ''; }
     } catch (error) {
       if (this.enabled && this.eligible) { this.error = `${error.message}. ${this.exhausted ? 'Choose Retry media to rebuild.' : 'Media will retry within three attempts.'}`; }
     } finally {

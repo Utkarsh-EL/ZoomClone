@@ -132,7 +132,7 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     }
     await browsers[0].cdp('Emulation.clearDeviceMetricsOverride', {}, a.sessionId);
     await a.eval("document.querySelector('#media-play').click()");
-    assert.equal(await a.eval('media.playback'), 'playing');
+    await until('explicit playback starts', async () => await a.eval("media.playback === 'playing'") ? true : undefined);
     await a.eval("document.querySelector('#media-play').click()"); assert.equal(await a.eval('media.playback'), 'muted');
     check('explicit playback and responsive desktop/mobile media controls');
     await a.eval("document.querySelector('#share-request').click()");
@@ -194,7 +194,7 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     for (const tab of [a, b]) await tab.eval("media.subscribe()");
     const recovered = [await received(a), await received(b)];
     assert.notEqual(await a.eval("media.epoch"), oldEpoch);
-    check("SFU crash leaves chat usable, explicit media rebuild with new epoch", { elapsedMs: performance.now() - beforeRestart, stats: recovered });
+    check("SFU crash leaves chat usable, supervised media rebuild with new epoch", { elapsedMs: performance.now() - beforeRestart, stats: recovered });
     for (let i = 0; i < participants.length; i++) {
       const view = await [a, b][i].eval("attachment.view()");
       assert.equal(view.view.participantId, participants[i].session.view().participantId);

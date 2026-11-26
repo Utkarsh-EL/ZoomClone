@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CaptureController } from '../client/media-capture.js';
 import { MediaLab } from '../client/media-lab.js';
+import { ParticipantMedia } from '../client/participant-media.js';
 
 function fixture() {
   const attachment = new EventTarget(); attachment.ownsCapture = true; attachment.readyState = 'attached';
@@ -164,4 +165,37 @@ test('producer polling is single-flight and stale transport callbacks cannot sig
   assert.match((await rejected).message, /MEDIA_CANCELED/);
   transports[0].handlers.connectionstatechange('failed'); assert.equal(media.state, 'ready');
   assert.deepEqual(actions, ['open', 'list', 'open']);
+});
+test('pending playback cannot hold polling or prevent a failed transport from exhausting rebuilds', async t => {
+  const savedDocument = globalThis.document, savedStream = globalThis.MediaStream;
+  t.after(() => { globalThis.document = savedDocument; globalThis.MediaStream = savedStream; });
+  globalThis.document = { createElement: () => ({ setAttribute() {}, remove() {}, play: () => new Promise(() => {}) }) };
+  globalThis.MediaStream = class {};
+  const attachment = new EventTarget(); attachment.readyState = 'attached'; attachment.view = async () => ({ view: { participantId: 'me' } });
+  let opens = 0; const transports = [];
+  attachment.media = async request => {
+    if (request.action === 'open') opens++;
+    return { epoch: 'epoch', value: request.action === 'list' ? [{ id: 'remote', participantId: 'other', source: 'camera' }] : { rtpCapabilities: {}, send: {}, recv: {} } };
+  };
+  class FakeDevice {
+    async load() {};
+    createSendTransport() { const handlers = {}; const transport = { connectionState: 'connecting', on(event, handler) { handlers[event] = handler; }, handlers, close() {}, async consume() { return { id: 'consumer', kind: 'video', track: {}, close() {} }; } }; transports.push(transport); return transport; }
+    createRecvTransport() { return this.createSendTransport(); }
+  }
+  const model = new EventTarget(); model.attached = true; model.view = view(); model.state = model.view.observation.state;
+  const media = new MediaLab(attachment, { Device: FakeDevice, container: { append() {} } });
+  const controller = new ParticipantMedia(model, attachment, media, { schedule() {}, cancel() {} });
+  t.after(() => controller.dispose());
+  const started = controller.enable();
+  assert.equal(await Promise.race([started.then(() => 'settled'), new Promise(resolve => setTimeout(() => resolve('blocked'), 40))]), 'settled');
+  assert.equal(media.healthy, false);
+  for (let i = 0; i < 3; i++) { transports.at(-1).handlers.connectionstatechange('failed'); await controller.tick(); }
+  assert.equal(opens, 3); assert.equal(controller.exhausted, true);
+});
+test('late playback rejection cannot override a later mute choice', async () => {
+  const attachment = new EventTarget(); let reject;
+  const media = new MediaLab(attachment);
+  media.consumers.set('remote', { close() {}, element: { muted: true, remove() {}, play: () => new Promise((_, fail) => { reject = fail; }) } });
+  const playing = media.play(); media.mute(); reject(new Error('NotAllowedError')); await playing;
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(media.playback, 'muted');
 });
