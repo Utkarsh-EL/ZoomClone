@@ -3,8 +3,8 @@ import type { MediaRequest } from "./room.ts";
 
 /** Private adapter -> SFU boundary. No automatic retries: an effect timeout is
  * uncertain; reopen transient transports under a new fresh authorization. */
-export function kernelClient(options: { address: string; token: string; identity: Identity; nodeId: string }) {
-  const wire = new ControlWire(options.identity);
+export function kernelClient(options: { address: string; token: string; identity: Identity; nodeId: string }, sharedWire?: ControlWire) {
+  const wire = sharedWire ?? new ControlWire(options.identity);
   return async (request: MediaRequest): Promise<any> => {
     const packet = wire.request(request);
     const response = await fetch(`${options.address}/v1/control`, { method: "POST", headers: { Authorization: `Bearer ${options.token}`, "Content-Type": "application/json" },

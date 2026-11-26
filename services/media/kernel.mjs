@@ -24,7 +24,7 @@ function closePeer(id) { const p = peers.get(id); if (p) { p.send.close(); p.rec
 function transportOptions(t) { return { id: t.id, iceParameters: t.iceParameters, iceCandidates: t.iceCandidates, dtlsParameters: t.dtlsParameters }; }
 async function execute(r) {
   if (r.action === 'hello') return {};
-  if (r.action === 'closePeer') { closePeer(r.peerId); return {}; }
+  if (r.action === 'closePeer') { const p = peers.get(r.peerId); if (p && ownerKey(p.owner) === ownerKey(r.owner)) closePeer(r.peerId); return {}; }
   if (r.action === 'sync') {
     if (!r.owner || !Number.isSafeInteger(r.owner.generation) || !Number.isSafeInteger(r.grantVersion)) throw new Error('INVALID_FENCE');
     if (owner && (owner.meetingId !== r.owner.meetingId || owner.generation > r.owner.generation || (owner.generation === r.owner.generation && ownerKey(owner) !== ownerKey(r.owner)))) throw new Error('FENCED');
@@ -46,7 +46,7 @@ async function execute(r) {
     let recv;
     try { recv = await router.createWebRtcTransport({ webRtcServer, enableUdp: true, enableTcp: true, preferTcp: true }); }
     catch (e) { send.close(); throw e; }
-    peers.set(r.peerId, { participantId: r.participantId, send, recv, producers: new Map(), consumers: new Map() });
+    peers.set(r.peerId, { participantId: r.participantId, owner: { ...r.owner }, send, recv, producers: new Map(), consumers: new Map() });
     return { rtpCapabilities: router.rtpCapabilities, send: transportOptions(send), recv: transportOptions(recv) };
   }
   const p = peers.get(r.peerId);

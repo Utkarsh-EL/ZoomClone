@@ -117,3 +117,30 @@ test("room shutdown refuses admission and waits for admitted work and peer teard
   await assert.rejects(room.handle(f.context, { action: "open" }), /MEDIA_CLOSED/);
   assert.equal(closed, false); release(); await work; await closing; assert.equal(closed, true);
 });
+
+test("a queued close and reopen retain the reservation through revocation and shutdown", async () => {
+  const f = fixture(); let release!: () => void, live = false;
+  const room = new MediaRoom(async r => {
+    if (r.action === "open") live = true;
+    if (r.action === "closePeer") { if (!release) await new Promise<void>(resolve => { release = resolve; }); live = false; }
+    return { epoch: "epoch", value: {} };
+  });
+  await room.handle(f.context, { action: "open" });
+  const closing = room.handle(f.context, { action: "closePeer" });
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  const reopen = room.handle(f.context, { action: "open" });
+  release(); await closing; await reopen;
+  await room.revoke(f.context.peerId); await room.close(); assert.equal(live, false);
+});
+
+test("failed teardown retains uncertain resources for shutdown instead of reporting quiescence", async () => {
+  const f = fixture(); let available = true, live = false;
+  const room = new MediaRoom(async r => {
+    if (r.action === "open") live = true;
+    if (r.action === "closePeer") { if (!available) throw new Error("SFU_UNAVAILABLE"); live = false; }
+    return { epoch: "epoch", value: {} };
+  });
+  await room.handle(f.context, { action: "open" }); available = false;
+  await assert.rejects(room.revoke(f.context.peerId), /SFU_UNAVAILABLE/);
+  available = true; await room.close(); assert.equal(live, false);
+});

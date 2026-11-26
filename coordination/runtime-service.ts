@@ -9,6 +9,8 @@ import { RuntimeAgent, type RuntimeOptions } from "./runtime-agent.ts";
 import { serveRuntime } from "./runtime-rpc.ts";
 import { serveParticipants } from "./participant-gateway.ts";
 import { ControlWire } from "./wire.ts";
+import { provisionMedia, type MediaRoute } from "../media/provision.ts";
+import type { RuntimeMedia } from "../media/runtime-media.ts";
 
 export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"> {
   incarnation?: string;
@@ -22,6 +24,7 @@ export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"
   connectionString: string;
   runtimeConnectionString: string;
   participants?: { address: string; token: string; timeoutMs?: number };
+  media?: { routes: MediaRoute[] };
 }
 
 /** Composition only: the activation protocol remains in RecoveryController,
@@ -42,17 +45,25 @@ export async function startMeetingRuntime(config: MeetingRuntimeConfig, report: 
   let agent: RuntimeAgent | undefined;
   let service: Awaited<ReturnType<typeof serveRuntime>> | undefined;
   let participants: Awaited<ReturnType<typeof serveParticipants>> | undefined;
+  let media: RuntimeMedia | undefined;
   try {
+    if (config.media) {
+      if (!config.participants) throw new Error("MEDIA_REQUIRES_PARTICIPANTS");
+      media = provisionMedia(config.media.routes, wire);
+    }
     agent = new RuntimeAgent(helper, store, { ...identity, runtimeId: config.runtimeId, expectedRevision: config.expectedRevision,
       intervalMs: config.intervalMs, readinessMs: config.readinessMs, maxMeetings: config.maxMeetings });
     service = await serveRuntime(agent, { address: config.address, token: config.token, callers: config.callers, wire });
-    if (config.participants) participants = await serveParticipants(agent, store, { ...config.participants, wire });
+    if (config.participants) participants = await serveParticipants(agent, store, { ...config.participants, wire, media });
     const scheduled = agent.run({ signal: abort.signal, report });
     let closing: Promise<void> | undefined;
     const close = () => {
       closing ??= (async () => {
         abort.abort(); agent!.stop();
-        try { await Promise.all([service!.close(), participants?.close()]); await scheduled.catch(() => {}); }
+        try {
+          await Promise.all([service!.close(), participants?.close()]); await scheduled.catch(() => {});
+          await media?.close();
+        }
         finally { await pool.end(); await db.close(); }
       })();
       return closing;
@@ -65,6 +76,7 @@ export async function startMeetingRuntime(config: MeetingRuntimeConfig, report: 
   } catch (error) {
     abort.abort(); agent?.stop();
     await Promise.allSettled([service?.close(), participants?.close()]);
+    await media?.close().catch(() => {});
     await pool.end(); await db.close(); throw error;
   }
 }

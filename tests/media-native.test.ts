@@ -13,9 +13,11 @@ import { RemoteRuntime, availableRuntimes } from "../coordination/runtime-rpc.ts
 import { RecoveryController } from "../coordination/recovery-controller.ts";
 import { startParticipant } from "../client/participant-agent.ts";
 import { serveBrowserAttachment } from "../client/browser-attachment.ts";
-import { MediaRoom } from "../media/room.ts";
-import { kernelClient } from "../media/kernel-client.ts";
 import { nativeBrowser } from "./fixtures/native-browser.ts";
+import { tcpCut } from "./fixtures/tcp-cut.ts";
+import { ParticipantConnection } from "../client/participant-transport.ts";
+import { ownerFor } from "../coordination/recovery-controller.ts";
+import type { MetadataState } from "../coordination/helper-client.ts";
 
 async function port() {
   const server = createServer(); await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -26,10 +28,12 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
   const clusterId = storage.clusterId, meetingId = randomUUID();
   let db: Database | undefined, pool: ReturnType<typeof createPool> | undefined, helpers: CoordinatorLab | undefined;
   let runtime: Awaited<ReturnType<typeof startMeetingRuntime>> | undefined;
+  let successor: Awaited<ReturnType<typeof startMeetingRuntime>> | undefined;
+  const cuts: Awaited<ReturnType<typeof tcpCut>>[] = [];
   const participants: ReturnType<typeof startParticipant>[] = [], attachments: Awaited<ReturnType<typeof serveBrowserAttachment>>[] = [], browsers: Awaited<ReturnType<typeof nativeBrowser>>[] = [];
   const name = `zoom-media-${randomUUID().slice(0, 8)}`, identity = { clusterId, nodeId: randomUUID(), incarnation: randomUUID() }, nodeId = randomUUID(), token = randomBytes(32).toString("hex");
   let container = false;
-  const evidence: any = { base: "cbc3a47", storageLab: storage.project, mediaContainer: name, checks: [] };
+  const evidence: any = { base: "be0dc1d", composition: "production participant gateway and provisioned SFU routes", storageLab: storage.project, mediaContainer: name, checks: [] };
   function check(name: string, value: unknown = true) { evidence.checks.push({ name, value }); console.log(`media check: ${name}`); }
   try {
     // Compose's in-container pg_isready can see the temporary initialization
@@ -44,41 +48,44 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     pool = createPool(runtimeURL.href); const store = new MeetingStore(db, pool);
     helpers = await CoordinatorLab.create(3, clusterId);
     const routes = helpers.nodes.map(n => ({ helperId: n.id, address: n.address })), helper = helpers.connection(await helpers.leader());
-    const runtimeId = randomUUID(), runtimeToken = randomBytes(32).toString("hex"), participantToken = randomBytes(32).toString("hex");
-    runtime = await startMeetingRuntime({ clusterId, runtimeId, expectedRevision: 0, address: "127.0.0.1:0", token: runtimeToken, callers: [identity.nodeId], helpers: routes,
+    const controlPort = await port(), mediaPort = await port();
+    const runtimeId = randomUUID(), runtimeIncarnation = randomUUID(), successorId = randomUUID(), successorIncarnation = randomUUID();
+    const runtimeToken = randomBytes(32).toString("hex"), participantToken = randomBytes(32).toString("hex");
+    for (const route of routes) cuts.push(await tcpCut(route.address));
+    const isolatedHelpers = routes.map((route, i) => ({ ...route, address: cuts[i].address }));
+    const successorMedia = await tcpCut(`127.0.0.1:${controlPort}`); cuts.push(successorMedia);
+    const mediaRoute = { meetingId, address: `http://127.0.0.1:${controlPort}`, nodeId, token, observationPath: join(storage.root, "media-primary.json") };
+    runtime = await startMeetingRuntime({ clusterId, runtimeId, incarnation: runtimeIncarnation, expectedRevision: 0, address: "127.0.0.1:0", token: runtimeToken, callers: [identity.nodeId], helpers: isolatedHelpers,
       helperToken: helpers.token, helperTimeoutMs: 400, connectionString: storage.url, runtimeConnectionString: runtimeURL.href,
-      intervalMs: 500, readinessMs: 2000, participants: { address: "127.0.0.1:0", token: participantToken } }, (_id, error) => {
+      intervalMs: 500, readinessMs: 2000, participants: { address: "127.0.0.1:0", token: participantToken, timeoutMs: 15000 }, media: { routes: [mediaRoute] } }, (_id, error) => {
         evidence.runtimeRenewals ??= { ok: 0, errors: {} };
         if (error) evidence.runtimeRenewals.errors[error.message] = (evidence.runtimeRenewals.errors[error.message] ?? 0) + 1;
         else { evidence.runtimeRenewals.ok++; evidence.lastRenewalAtMs = performance.now(); }
       });
+    successor = await startMeetingRuntime({ clusterId, runtimeId: successorId, incarnation: successorIncarnation, expectedRevision: 0,
+      address: "127.0.0.1:0", token: runtimeToken, callers: [identity.nodeId], helpers: routes,
+      helperToken: helpers.token, helperTimeoutMs: 400, connectionString: storage.url, runtimeConnectionString: runtimeURL.href,
+      participants: { address: "127.0.0.1:0", token: participantToken, timeoutMs: 15000 }, media: { routes: [{ ...mediaRoute,
+        address: `http://${successorMedia.address}`, observationPath: join(storage.root, "media-successor.json") }] } }, () => {});
     const incarnation = runtime.agent.identity.incarnation;
     const remote = new RemoteRuntime({ clusterId, runtimeId, incarnation, address: runtime.address, token: runtimeToken, identity, timeoutMs: 800 });
+    const nextRemote = new RemoteRuntime({ clusterId, runtimeId: successorId, incarnation: successorIncarnation, address: successor.address, token: runtimeToken, identity, timeoutMs: 800 });
     await until("registered media runtime", async () => await remote.available() ? true : undefined);
     await helper.call("apply", { command: { id: randomUUID(), kind: "reserve", meetingId, code: "media-" + meetingId.slice(0, 8) } });
-    const controller = new RecoveryController(helper, store, { clusterId });
+    const controller = new RecoveryController(helper, store, { clusterId, suspicionMs: 1500 });
     await until("active media meeting", async () => await controller.tick(meetingId, await availableRuntimes([remote])) === "READY" ? true : undefined);
-    const controlPort = await port(), mediaPort = await port();
     storage.docker(["run", "--detach", "--name", name, "--label", `org.zoomclone.lab=${name}`, "--publish", `127.0.0.1:${controlPort}:8080/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/udp`,
       ...["MEDIA_CLUSTER_ID", "MEDIA_NODE_ID", "MEDIA_MEETING_ID", "MEDIA_CALLERS", "MEDIA_TOKEN", "MEDIA_PORT"].flatMap(key => ["--env", key]), "zoomclone-media-feasibility:3.32.2"],
-      { MEDIA_CLUSTER_ID: clusterId, MEDIA_NODE_ID: nodeId, MEDIA_MEETING_ID: meetingId, MEDIA_CALLERS: JSON.stringify([{ nodeId: runtimeId, incarnation }]), MEDIA_TOKEN: token, MEDIA_PORT: String(mediaPort) });
+      { MEDIA_CLUSTER_ID: clusterId, MEDIA_NODE_ID: nodeId, MEDIA_MEETING_ID: meetingId, MEDIA_CALLERS: JSON.stringify([{ nodeId: runtimeId, incarnation }, { nodeId: successorId, incarnation: successorIncarnation }]), MEDIA_TOKEN: token, MEDIA_PORT: String(mediaPort) });
     container = true;
-    const effect = kernelClient({ address: `http://127.0.0.1:${controlPort}`, token, identity: { clusterId, nodeId: runtimeId, incarnation }, nodeId });
-    const room = new MediaRoom(effect), bundle = await readFile(".local/media-lab.js", "utf8");
     for (const person of ["Alice", "Bob"]) {
       const agent = startParticipant({ sessionPath: join(storage.root, `${person}.sqlite`), target: { clusterId, meetingId, name: person }, helpers: routes, helperToken: helpers.token,
-        routes: [{ runtimeId, incarnation, address: runtime.participantAddress!, token: participantToken }], helperTimeoutMs: 400, timeoutMs: 1000, intervalMs: 200 });
+        routes: [{ runtimeId, incarnation, address: runtime.participantAddress!, token: participantToken },
+          { runtimeId: successorId, incarnation: successorIncarnation, address: successor.participantAddress!, token: participantToken }], helperTimeoutMs: 400, timeoutMs: 8000, intervalMs: 200,
+        browser: { address: "127.0.0.1:0", timeoutMs: 30000 }, media: { bundlePath: ".local/media-lab.js" } });
       participants.push(agent);
       await until(`${person} joined`, async () => agent.session.state === "connected" ? true : undefined);
-      const attachment = await serveBrowserAttachment(agent.session, { address: "127.0.0.1:0", timeoutMs: 30000, experimentalMedia: { bundle,
-        handle: (peerId, request, ownsCapture) => room.handle({ peerId, participantId: agent.session.view().participantId, ownsCapture,
-          authorize: async () => {
-            const started = performance.now();
-            try { const gate = runtime!.agent.authority(meetingId); if (!gate) throw new Error("NOT_READY"); return await runtime!.store.read(gate, agent.session.journal.credential(), 0, 1); }
-            catch (error) { const code = error instanceof Error ? error.message : "error"; evidence.authorizationRejections ??= {}; evidence.authorizationRejections[code] = (evidence.authorizationRejections[code] ?? 0) + 1; evidence.lastRejectedRenewalAgeMs = performance.now() - (evidence.lastRenewalAtMs ?? 0); throw error; }
-            finally { evidence.maxAuthorizationMs = Math.max(evidence.maxAuthorizationMs ?? 0, performance.now() - started); }
-          } }, request),
-        revoke: peerId => room.revoke(peerId) } });
+      const attachment = await agent.openBrowser();
       attachments.push(attachment);
     }
     check("real PostgreSQL, three helpers, provisioned runtime route and two distinct shared sessions");
@@ -162,9 +169,38 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
       assert.deepEqual(view.view.commands, participants[i].session.view().commands);
     }
     check("browser and CLI retain identity, original command IDs and unfiltered revision zero");
-    runtime.agent.stop();
-    assert.equal(await a.eval("media.call({action:'list'}).then(()=>null,e=>e.message)"), "NOT_READY");
-    check("stopped runtime refuses new media despite retained browser state");
+    const oldOwner = ownerFor(clusterId, (await helper.call<MetadataState>("read")).meetings[meetingId]);
+    // Isolate old runtime + SFU from the coordinators/new runtime's media path.
+    // Old runtime retains SQL reachability; the successor retains SQL/quorum.
+    for (const cut of cuts.slice(0, 3)) cut.cut(); successorMedia.cut();
+    await until("takeover while old runtime and SFU are isolated", async () => {
+      const result = await controller.tick(meetingId, await availableRuntimes([nextRemote]));
+      return result === "READY" && (await store.observe(meetingId)).generation === 2 ? true : undefined;
+    }, 20000);
+    const credential = participants[0].session.journal.credential();
+    await assert.rejects(runtime.store.read({ owner: oldOwner, ready: () => true }, credential, 0, 1), /FENCED/);
+    const stale = await ParticipantConnection.connect({ identity: { clusterId, nodeId: credential.participantId, incarnation: randomUUID() },
+      owner: oldOwner, address: runtime.participantAddress!, token: participantToken });
+    try { await assert.rejects(stale.media(credential, randomUUID(), { action: "open" }, true), /NOT_READY|FENCED/); }
+    finally { stale.close(); }
+    const takeoverChat = participants[0].session.submit({ type: "chat", content: "chat during media isolation and runtime takeover" });
+    await until("takeover chat independent of isolated SFU", async () => participants[1].session.view().events.some(e => e.payload.content === "chat during media isolation and runtime takeover") ? true : undefined);
+    assert.ok(participants[0].session.view().commands.find(c => c.id === takeoverChat)?.outcome);
+    assert.equal(await a.eval("media.call({action:'list'}).then(()=>false,()=>media.state==='unavailable')"), true);
+    check("real TCP isolation: takeover chat works, old runtime and stale SQL authority refuse new media");
+    successorMedia.heal();
+    await a.eval("media.reconnect()"); await b.eval("media.reconnect()");
+    for (const tab of [a, b]) await tab.eval("media.subscribe()");
+    check("successor reconciles same provisioned SFU after healing", [await received(a), await received(b)]);
+    await runtime.close();
+    assert.ok((await b.eval("media.call({action:'list'})")).some((p: any) => p.source === "camera"));
+    check("old runtime drain cannot tear down successor-owned transports");
+    const observations = JSON.parse(await readFile(join(storage.root, "media-successor.json"), "utf8"));
+    assert.ok(observations.length <= 64 && observations.some((record: any) => record.status === "applied"));
+    assert.equal(JSON.stringify(observations).includes(credential.secret), false);
+    check("separate bounded persisted effect observations exclude participant credentials");
+    await Promise.all(participants.map(participant => participant.close()));
+    check("participant shutdown explicitly drains local media cleanup before journal close");
     evidence.result = "passed";
   } catch (error) {
     evidence.result = "failed"; evidence.error = String(error);
@@ -177,7 +213,8 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     await Promise.allSettled(browsers.map(browser => browser.close()));
     await Promise.allSettled(attachments.map(attachment => attachment.close()));
     await Promise.allSettled(participants.map(agent => agent.close()));
-    await runtime?.close(); await helpers?.stop(); await pool?.end(); await db?.close();
+    await Promise.allSettled([runtime?.close(), successor?.close()]); await Promise.allSettled(cuts.map(cut => cut.close()));
+    await helpers?.stop(); await pool?.end(); await db?.close();
     if (container) storage.docker(["rm", "--force", name]); storage.stop();
   }
 });

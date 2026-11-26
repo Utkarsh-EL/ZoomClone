@@ -14,6 +14,7 @@ export class MediaLab {
     attachment.addEventListener('close', () => this.closeTransports());
   }
   async call(request, opening = false) {
+    const retryUntil = performance.now() + 4000;
     for (let attempt = 0; ; attempt++) {
       try {
         const reply = await this.attachment.media({ ...request, ...(!opening ? { epoch: this.epoch } : {}) });
@@ -23,7 +24,7 @@ export class MediaLab {
       } catch (error) {
         // The adapter reports NOT_READY only before any SFU effect. Renewal
         // deliberately drops readiness briefly; don't phase-lock onto it.
-        if (error.message === 'NOT_READY' && attempt < 15) { await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 46))); continue; }
+        if (['NOT_READY', 'MEDIA_ROUTE_UNAVAILABLE'].includes(error.message) && attempt < 63 && performance.now() < retryUntil) { await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 46))); continue; }
         this.state = 'unavailable'; throw error;
       }
     }

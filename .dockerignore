@@ -7,3 +7,5 @@
 !coordination/
 !coordination/wire.ts
 !coordination/logical-clock.ts
+!media/
+!media/kernel-fence.ts

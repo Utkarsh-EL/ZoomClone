@@ -50,6 +50,18 @@ test('media retries explicit pre-effect NOT_READY with a bound but never retries
   calls = 0; attachment.media = async () => { calls++; throw new Error('ATTACHMENT_TIMEOUT'); };
   await assert.rejects(media.call({ action: 'produce' }), /ATTACHMENT_TIMEOUT/); assert.equal(calls, 1);
 });
+
+test('media may retry certified route lookup rejection before any effect was sent', async () => {
+  const attachment = new EventTarget(); let calls = 0;
+  attachment.media = async () => { if (++calls === 1) throw new Error('MEDIA_ROUTE_UNAVAILABLE'); return { epoch: 'current', value: 'ready' }; };
+  assert.equal(await new MediaLab(attachment).call({ action: 'list' }), 'ready'); assert.equal(calls, 2);
+});
+
+test('a bounded media retry window can span two runtime renewal intervals without replaying an effect', async () => {
+  const attachment = new EventTarget(), readyAt = performance.now() + 1050; let effects = 0;
+  attachment.media = async () => { if (performance.now() < readyAt) throw new Error('NOT_READY'); effects++; return { epoch: 'current', value: 'ready' }; };
+  assert.equal(await new MediaLab(attachment).call({ action: 'list' }), 'ready'); assert.equal(effects, 1);
+});
 test('explicit stop during a pending capture prevents its late completion from publishing', async () => {
   const f = fixture(), track = f.track(); let finish;
   const start = f.capture.start('camera', () => new Promise(resolve => { finish = resolve; }));

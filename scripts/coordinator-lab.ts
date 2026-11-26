@@ -52,7 +52,9 @@ export class CoordinatorLab {
     process.once("SIGTERM", lab.onSignal);
     try {
       for (let i = 0; i < count; i++) {
-        const reservation = createServer();
+        // Helpers already running can dial a not-yet-started peer. Never let
+        // those connections hold reservation.close() open indefinitely.
+        const reservation = createServer(socket => socket.destroy());
         reservations.push(reservation);
         await new Promise<void>((resolve, reject) => { reservation.once("error", reject); reservation.listen(0, "127.0.0.1", resolve); });
         const address = reservation.address();

@@ -44,6 +44,47 @@ test("production participant sockets pin authority, stamp replies and pass resum
   } finally { connection.close(); await service.close(); }
 });
 
+test("production media ingress authenticates fresh storage, scopes peers and refuses stale authority", async () => {
+  const { RuntimeMedia } = await import("../media/runtime-media.ts");
+  const f = fixture(), effects: any[] = [], peerId = randomUUID();
+  f.store.read = async (_authority?: unknown, credential?: any) => {
+    if (credential?.secret !== f.command.secret) throw new StoreError("AUTH_REQUIRED");
+    return { code: "socket", ...f.owner, phase: "ACTIVE" as const, watermark: 1,
+      state: { ...emptyState(), members: { [f.command.participantId]: { name: "Alice", joined: true } } },
+      observedAt: new Date().toISOString(), events: [], scannedWatermark: 1 };
+  };
+  const media = new RuntimeMedia([{ meetingId: f.owner.meetingId, effect: async r => { effects.push(r); return { epoch: "epoch", value: "ok" }; } }]);
+  const service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token, media });
+  const connection = await ParticipantConnection.connect({ ...f, address: service.address });
+  try {
+    assert.equal((await connection.media(f.command, peerId, { action: "open" }, false)).value, "ok");
+    assert.equal(effects.at(-1).peerId, `${f.identity.nodeId}/${f.identity.incarnation}/${peerId}`);
+    const count = effects.length;
+    await assert.rejects(connection.media({ ...f.command, secret: "f".repeat(64) }, peerId, { action: "list", epoch: "epoch" }, false), /AUTH_REQUIRED/);
+    assert.equal(effects.filter(e => e.action !== "hello").length, count - 1);
+    await assert.rejects(connection.media(f.command, peerId, { action: "produce", source: "camera", epoch: "epoch" }, false), /NOT_CAPTURE_OWNER/);
+    // Failed fresh credentials must not exhaust this meeting's shared room.
+    for (let i = 0; i < 8; i++) await assert.rejects(connection.media({ ...f.command, secret: "f".repeat(64) }, randomUUID(), { action: "open" }, false), /AUTH_REQUIRED/);
+    assert.equal((await connection.media(f.command, randomUUID(), { action: "open" }, false)).value, "ok");
+    f.unready();
+    await assert.rejects(connection.media(f.command, peerId, { action: "open" }, true), /NOT_READY/);
+  } finally { connection.close(); await service.close(); await media.close(); }
+});
+
+test("stalled SFU work cannot consume the durable command admission budget", async () => {
+  let release!: () => void, entered!: () => void;
+  const arrived = new Promise<void>(resolve => { entered = resolve; }), f = fixture();
+  const media = { async handle() { entered(); await new Promise<void>(resolve => { release = resolve; }); return { epoch: "epoch", value: {} }; } };
+  const service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token, maxConcurrent: 1, media: media as any });
+  const publishing = await ParticipantConnection.connect({ ...f, address: service.address });
+  const chatting = await ParticipantConnection.connect({ ...f, address: service.address });
+  try {
+    const work = publishing.media(f.command, randomUUID(), { action: "open" }, false); await arrived;
+    try { assert.equal((await chatting.execute(f.command)).code, "OK"); }
+    finally { release(); await work; }
+  } finally { release?.(); publishing.close(); chatting.close(); await service.close(); }
+});
+
 test("gateway rejects unauthenticated browser/agent sockets and stale owners before storage", async () => {
   const f = fixture(), service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token });
   try {

@@ -9,6 +9,8 @@ import { SessionJournal } from "./session-journal.ts";
 import { participantResolver, type ParticipantRoute } from "./participant-transport.ts";
 import type { SessionTarget } from "./types.ts";
 import { serveBrowserAttachment, type BrowserOptions } from "./browser-attachment.ts";
+import { LocalMediaBridge } from "./local-media.ts";
+import { readFile } from "node:fs/promises";
 
 export interface ParticipantAgentConfig {
   sessionPath: string;
@@ -21,6 +23,7 @@ export interface ParticipantAgentConfig {
   timeoutMs?: number;
   intervalMs?: number;
   browser?: Omit<BrowserOptions, "wire">;
+  media?: { bundlePath: string };
 }
 
 /** One agent owns the journal and ClientSession; every local adapter uses this
@@ -33,8 +36,16 @@ export function startParticipant(config: ParticipantAgentConfig, report: (error?
     const helper = config.discovery ? new DiscoveredHelpers({ identity, token: config.helperToken, timeoutMs: config.helperTimeoutMs,
       discovery: new DiscoveryClient({ ...config.discovery, identity }, wire) }, wire)
       : new LeaderRoute(config.helpers.map(route => new HelperClient({ ...route, ...identity, token: config.helperToken, timeoutMs: config.helperTimeoutMs }, wire)));
-    const session = new ClientSession(journal, participantResolver({ ...identity, meetingId: config.target.meetingId, helper,
-      routes: config.routes, timeoutMs: config.timeoutMs }, wire));
+    const resolve = participantResolver({ ...identity, meetingId: config.target.meetingId, helper, routes: config.routes, timeoutMs: config.timeoutMs }, wire);
+    const session = new ClientSession(journal, resolve);
+    const media = config.media ? new LocalMediaBridge(async (peerId, request, ownsCapture) => {
+      // Lookup/connect has sent no media packet. Certify only this rejection as
+      // safe for the bounded browser retry; effect/transport uncertainty below
+      // retains its original error and requires an explicit rebuild.
+      const transport = await resolve().catch(error => { throw new Error("MEDIA_ROUTE_UNAVAILABLE", { cause: error }); });
+      try { return await transport.media(journal.credential(), peerId, request, ownsCapture); }
+      finally { transport.close(); }
+    }) : undefined;
     const abort = new AbortController();
     const done = session.run(abort.signal, report, config.intervalMs);
     let closed: Promise<void> | undefined;
@@ -42,12 +53,14 @@ export function startParticipant(config: ParticipantAgentConfig, report: (error?
     return { session, done,
       openBrowser() {
         if (closed) throw new Error("PARTICIPANT_CLOSED");
-        return browser ??= serveBrowserAttachment(session, { ...(config.browser ?? { address: "127.0.0.1:0" }), wire });
+        return browser ??= (async () => serveBrowserAttachment(session, { ...(config.browser ?? { address: "127.0.0.1:0" }), wire,
+          ...(media ? { experimentalMedia: { bundle: await readFile(config.media!.bundlePath, "utf8"),
+            handle: (peerId, request, owns) => media.handle(peerId, request, owns), revoke: peerId => media.revoke(peerId) } } : {}) }))();
       },
       close(): Promise<void> {
         return closed ??= (async () => {
           abort.abort();
-          try { await (await browser?.catch(() => undefined))?.close(); await done; }
+          try { await (await browser?.catch(() => undefined))?.close(); await done; await media?.close(); }
           finally { journal.close(); }
         })();
       } };

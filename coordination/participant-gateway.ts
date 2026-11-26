@@ -6,10 +6,13 @@ import { validateOperation, type Operation } from "../storage/engine.ts";
 import { StoreError, type Authority, type MeetingCommand, type ParticipantCredential } from "../storage/types.ts";
 import type { RuntimeAgent } from "./runtime-agent.ts";
 import { ControlWire, MAX_ENVELOPE_BYTES, UUID_PATTERN } from "./wire.ts";
+import type { RuntimeMedia } from "../media/runtime-media.ts";
+import type { MediaRequest } from "../media/room.ts";
 import { fields, record, validParticipantOwner, sameOwner, participantURL, participantTimeout, participantToken,
   PARTICIPANT_PROTOCOL, PARTICIPANT_REQUEST_BYTES } from "./participant-protocol.ts";
 
 type Endpoint = { authority(meetingId: string): Authority | undefined; identity: Pick<RuntimeAgent["identity"], "clusterId" | "runtimeId" | "incarnation"> };
+const bodyIsMedia = (body: unknown) => record(body) && body.operation === "media";
 function credential(value: unknown, nodeId: string, command = false): boolean {
   return record(value) && fields(value, command ? ["participantId", "secret", "id", "lamport", "operation"] : ["participantId", "secret"])
     && value.participantId === nodeId && typeof value.secret === "string" && /^[a-f0-9]{64}$/.test(value.secret);
@@ -19,6 +22,7 @@ function credential(value: unknown, nodeId: string, command = false): boolean {
  * runtime authority and opens a fresh SQL transaction with the exact fence. */
 export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStore, "execute" | "read">, options: {
   address: string; token: string; wire?: ControlWire; timeoutMs?: number; maxConcurrent?: number; maxClients?: number;
+  media?: RuntimeMedia;
 }) {
   const url = participantURL(options.address); participantToken(options.token);
   const deadline = participantTimeout(options.timeoutMs), maxConcurrent = options.maxConcurrent ?? 32, maxClients = options.maxClients ?? 128;
@@ -29,7 +33,7 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
   const server = createServer((_request, response) => { response.writeHead(404).end(); });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: PARTICIPANT_REQUEST_BYTES, perMessageDeflate: false,
     handleProtocols: protocols => protocols.has(PARTICIPANT_PROTOCOL) ? PARTICIPANT_PROTOCOL : false });
-  let active = 0, closing = false;
+  let active = 0, mediaActive = 0, closing = false;
   server.maxConnections = 256; server.headersTimeout = deadline; server.requestTimeout = deadline;
   // The socket timeout covers partial headers, idle sockets and stalled SQL.
   // Underlying bounded SQL work retains admission until it actually settles.
@@ -59,16 +63,20 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
       let packet;
       try { if (binary) throw new Error("BINARY"); packet = wire.accept(JSON.parse(data.toString())); }
       catch { socket.terminate(); return; }
-      if (busy || active >= maxConcurrent) { send(wire.reply(packet, null, { code: "BUSY", message: "BUSY" })); return; }
-      active++; busy = true;
+      const isMedia = bodyIsMedia(packet.body);
+      // An unavailable SFU must not spend the command/replay admission budget.
+      if (busy || (isMedia ? mediaActive >= 16 : active >= maxConcurrent)) { send(wire.reply(packet, null, { code: "BUSY", message: "BUSY" })); return; }
+      if (isMedia) mediaActive++; else active++;
+      busy = true;
       const timer = setTimeout(() => socket.terminate(), deadline);
       const work = (async () => {
         let result: unknown = null, error: { code: string; message: string } | undefined;
         try {
           const body = packet.body;
           if (!record(body) || body.version !== 1 || !validParticipantOwner(body.owner)
-            || !fields(body, ["version", "owner", "operation", "command", "credential", "after", "limit", "subscriptionRevision"])) throw new StoreError("INVALID_REQUEST");
+            || !fields(body, ["version", "owner", "operation", "command", "credential", "after", "limit", "subscriptionRevision", "peerId", "media", "ownsCapture"])) throw new StoreError("INVALID_REQUEST");
           const owner = body.owner;
+          if (body.operation !== "media" && [body.peerId, body.media, body.ownsCapture].some(value => value !== undefined)) throw new StoreError("INVALID_REQUEST");
           if (body.operation === "execute") {
             const c = body.command;
             if (!credential(c, packet.nodeId, true) || !record(c) || typeof c.id !== "string" || !UUID_PATTERN.test(c.id)
@@ -79,13 +87,31 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
             if (!credential(body.credential, packet.nodeId) || body.command !== undefined || body.subscriptionRevision !== 0
               || !Number.isSafeInteger(body.after) || (body.after as number) < 0 || !Number.isSafeInteger(body.limit)
               || (body.limit as number) < 1 || (body.limit as number) > 100) throw new StoreError("INVALID_REQUEST");
+          } else if (body.operation === "media") {
+            if (!credential(body.credential, packet.nodeId) || typeof body.peerId !== "string" || !UUID_PATTERN.test(body.peerId)
+              || !record(body.media) || typeof body.media.action !== "string" || typeof body.ownsCapture !== "boolean"
+              || [body.command, body.after, body.limit, body.subscriptionRevision].some(value => value !== undefined)) throw new StoreError("INVALID_REQUEST");
           } else throw new StoreError("INVALID_REQUEST");
           if (owner.clusterId !== agent.identity.clusterId || owner.runtimeId !== agent.identity.runtimeId || owner.incarnation !== agent.identity.incarnation) throw new StoreError("RUNTIME_MISMATCH");
           const authority = agent.authority(owner.meetingId);
           if (!authority || !authority.ready()) throw new StoreError("NOT_READY");
           if (!sameOwner(authority.owner, owner)) throw new StoreError("FENCED");
           if (body.operation === "execute") result = await store.execute(authority, body.command as unknown as MeetingCommand);
-          else {
+          else if (body.operation === "media") {
+            if (!options.media) throw new StoreError("MEDIA_DISABLED");
+            result = await options.media.handle(owner.meetingId, {
+              peerId: `${packet.nodeId}/${packet.incarnation}/${body.peerId}`, participantId: packet.nodeId,
+              ownsCapture: () => body.ownsCapture === true,
+              authorize: async () => {
+                // Reacquire current authority when serialized work actually runs.
+                // The ingress check cannot authorize a queued media operation.
+                const current = agent.authority(owner.meetingId);
+                if (!current || !current.ready()) throw new StoreError("NOT_READY");
+                if (!sameOwner(current.owner, owner)) throw new StoreError("FENCED");
+                return store.read(current, body.credential as unknown as ParticipantCredential, 0, 1);
+              },
+            }, body.media as MediaRequest);
+          } else {
             // Worst-case JSON escapes expand an 8192-byte chat sixfold. Sixteen
             // events plus the bounded live roster/queue fit the 1 MiB envelope.
             const page = await store.read(authority, body.credential as unknown as ParticipantCredential, body.after as number, Math.min(body.limit as number, 16));
@@ -95,9 +121,9 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
           }
           result = { owner, result };
         } catch (cause) {
-          const code = cause instanceof StoreError ? cause.code : "DEPENDENCY_UNAVAILABLE";
+          const code = cause instanceof StoreError ? cause.code : bodyIsMedia(packet.body) && cause instanceof Error && /^[A-Z_]{1,64}$/.test(cause.message) ? cause.message : "DEPENDENCY_UNAVAILABLE";
           error = { code, message: code };
-        } finally { clearTimeout(timer); active--; busy = false; }
+        } finally { clearTimeout(timer); if (isMedia) mediaActive--; else active--; busy = false; }
         send(wire.reply(packet, result, error));
       })();
       pending.add(work); void work.finally(() => pending.delete(work)).catch(() => socket.terminate());

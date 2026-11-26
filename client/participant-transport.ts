@@ -5,6 +5,7 @@ import { record, validParticipantOwner, sameOwner, participantURL, participantTi
 import type { MeetingCommand, Outcome, Owner, ParticipantCredential, Replay } from "../storage/types.ts";
 import { validOutcome } from "./session-journal.ts";
 import type { ParticipantTransport } from "./types.ts";
+import type { MediaRequest } from "../media/room.ts";
 
 export interface ParticipantRoute { runtimeId: string; incarnation: string; address: string; token: string }
 interface Options { owner: Owner; address: string; token: string; identity: Identity; timeoutMs?: number }
@@ -74,11 +75,14 @@ export class ParticipantConnection implements ParticipantTransport {
       || value.runtimeId !== this.owner.runtimeId || value.incarnation !== this.owner.incarnation || value.attemptId !== this.owner.attemptId) throw new Error("FENCED_REPLY");
     return value as unknown as Replay;
   }
+  async media(credential: ParticipantCredential, peerId: string, media: MediaRequest, ownsCapture: boolean): Promise<any> {
+    return this.call({ operation: "media", credential: { participantId: credential.participantId, secret: credential.secret }, peerId, media, ownsCapture });
+  }
 }
 
 /** READY metadata is a routing observation. The gateway validates readiness and
  * SQL ownership afresh; no participant receives PostgreSQL credentials. */
-export function participantResolver(options: Identity & { meetingId: string; helper: HelperAccess; routes: readonly ParticipantRoute[]; timeoutMs?: number }, sharedWire?: ControlWire): () => Promise<ParticipantTransport> {
+export function participantResolver(options: Identity & { meetingId: string; helper: HelperAccess; routes: readonly ParticipantRoute[]; timeoutMs?: number }, sharedWire?: ControlWire): () => Promise<ParticipantConnection> {
   const identity = { clusterId: options.clusterId, nodeId: options.nodeId, incarnation: options.incarnation };
   const wire = sharedWire ?? new ControlWire(identity), routes = structuredClone(options.routes);
   if (!routes.length || routes.length > 128) throw new Error("INVALID_PARTICIPANT_ROUTES");

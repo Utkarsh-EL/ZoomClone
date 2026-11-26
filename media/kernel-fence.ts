@@ -21,7 +21,7 @@ export class KernelFence {
     if (r.action !== "hello" && r.epoch !== this.epoch) throw new Error("SFU_RESTARTED");
     if (packet.lamport <= previous) throw new Error("STALE_MEDIA_CONTROL");
     this.callers.set(key, packet.lamport);
-    if (r.action === "hello" || r.action === "closePeer") return;
+    if (r.action === "hello") return;
     if (!r.owner || r.owner.meetingId !== this.meetingId || r.owner.runtimeId !== packet.nodeId || r.owner.incarnation !== packet.incarnation
       || !Number.isSafeInteger(r.owner.generation) || r.owner.generation < 1 || !UUID_PATTERN.test(r.owner.attemptId)) throw new Error("FENCED");
   }
