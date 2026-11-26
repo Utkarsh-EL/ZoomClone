@@ -8,6 +8,7 @@ import { ClientSession } from "./client-session.ts";
 import { SessionJournal } from "./session-journal.ts";
 import { participantResolver, type ParticipantRoute } from "./participant-transport.ts";
 import type { SessionTarget } from "./types.ts";
+import { serveBrowserAttachment, type BrowserOptions } from "./browser-attachment.ts";
 
 export interface ParticipantAgentConfig {
   sessionPath: string;
@@ -19,6 +20,7 @@ export interface ParticipantAgentConfig {
   routes: ParticipantRoute[];
   timeoutMs?: number;
   intervalMs?: number;
+  browser?: Omit<BrowserOptions, "wire">;
 }
 
 /** One agent owns the journal and ClientSession; every local adapter uses this
@@ -36,6 +38,18 @@ export function startParticipant(config: ParticipantAgentConfig, report: (error?
     const abort = new AbortController();
     const done = session.run(abort.signal, report, config.intervalMs);
     let closed: Promise<void> | undefined;
-    return { session, done, close(): Promise<void> { return closed ??= (async () => { abort.abort(); try { await done; } finally { journal.close(); } })(); } };
+    let browser: ReturnType<typeof serveBrowserAttachment> | undefined;
+    return { session, done,
+      openBrowser() {
+        if (closed) throw new Error("PARTICIPANT_CLOSED");
+        return browser ??= serveBrowserAttachment(session, { ...(config.browser ?? { address: "127.0.0.1:0" }), wire });
+      },
+      close(): Promise<void> {
+        return closed ??= (async () => {
+          abort.abort();
+          try { await (await browser?.catch(() => undefined))?.close(); await done; }
+          finally { journal.close(); }
+        })();
+      } };
   } catch (error) { journal.close(); throw error; }
 }

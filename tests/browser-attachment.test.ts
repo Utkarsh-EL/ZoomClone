@@ -12,6 +12,7 @@ import { ClientSession } from "../client/client-session.ts";
 import { SessionJournal } from "../client/session-journal.ts";
 import { ControlWire } from "../coordination/wire.ts";
 import { emptyState } from "../storage/engine.ts";
+import { startParticipant } from "../client/participant-agent.ts";
 
 async function fixture(timeoutMs = 2000, maxClients = 8) {
   const root = await mkdtemp(join(tmpdir(), "zoom-attachment-"));
@@ -135,4 +136,29 @@ test("unauthenticated and idle attachments expire, malformed frames fail closed 
     assert.equal((await again.call("view")).body.view.commands.length, 1);
     await once(again.socket, "close");
   } finally { await f.close(); }
+});
+
+test("agent owns one browser lifecycle, rotates capability on restart and closes failed startup", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zoom-attachment-agent-"));
+  const config = { sessionPath: join(root, "session.sqlite"), target: { clusterId: randomUUID(), meetingId: randomUUID(), name: "Alice" },
+    helpers: [{ helperId: randomUUID(), address: "127.0.0.1:1" }], helperToken: "h".repeat(64), helperTimeoutMs: 50,
+    routes: [{ runtimeId: randomUUID(), incarnation: randomUUID(), address: "127.0.0.1:1", token: "r".repeat(64) }], browser: { address: "127.0.0.1:0" } };
+  const agent = startParticipant(config);
+  try {
+    const [one, two] = await Promise.all([agent.openBrowser(), agent.openBrowser()]);
+    assert.equal(one, two);
+    const participantId = agent.session.view().participantId;
+    await Promise.all([agent.close(), agent.close()]);
+    await assert.rejects(fetch(one.origin), /fetch failed/);
+    assert.throws(() => agent.openBrowser(), /CLOSED/);
+    const restarted = startParticipant(config);
+    try {
+      const next = await restarted.openBrowser();
+      assert.equal(restarted.session.view().participantId, participantId);
+      assert.notEqual(new URL(next.url).hash, new URL(one.url).hash);
+    } finally { await restarted.close(); }
+    const failed = startParticipant({ ...config, browser: { address: "0.0.0.0:0" } });
+    await assert.rejects(failed.openBrowser(), /ADDRESS/);
+    await failed.close();
+  } finally { await agent.close(); await rm(root, { recursive: true, force: true }); }
 });

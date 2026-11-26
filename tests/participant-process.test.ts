@@ -14,6 +14,7 @@ import { RemoteRuntime, availableRuntimes } from "../coordination/runtime-rpc.ts
 import { ParticipantConnection } from "../client/participant-transport.ts";
 import { SessionJournal } from "../client/session-journal.ts";
 import type { CommandResult, MetadataState } from "../coordination/helper-client.ts";
+import { ControlWire } from "../coordination/wire.ts";
 
 const clusterId = process.env.ZOOM_STORAGE_CLUSTER_ID!, connectionString = process.env.ZOOM_STORAGE_ADMIN_URL!;
 if (!connectionString) throw new Error("Run npm run test:runtimes");
@@ -38,6 +39,30 @@ function jsonProcess(script: string, env: Record<string, string>) {
         if (result.error) throw new Error(result.error); return result.result;
       }, 3000);
     } };
+}
+
+async function attachBrowser(process: ReturnType<typeof jsonProcess>) {
+  const started = await process.event("participant.started"), url = new URL(started.browser.url);
+  const wire = new ControlWire({ clusterId, nodeId: randomUUID(), incarnation: randomUUID() });
+  const socket = new WebSocket(`ws://${url.host}/v1/attachment`, "zoom.attachment.v1", { headers: { Origin: url.origin } });
+  socket.on("error", () => {}); await once(socket, "open");
+  let attachment: unknown;
+  async function call(action: string, body: object = {}): Promise<any> {
+    const packet = wire.request({ version: 1, action, ...(attachment ? { attachment } : {}), ...body });
+    const result = new Promise<any>((resolve, reject) => {
+      const timer = setTimeout(() => { socket.off("message", receive); reject(new Error("ATTACHMENT_TIMEOUT")); }, 2000);
+      function receive(raw: WebSocket.RawData) {
+        const p = JSON.parse(raw.toString()); if (p.requestId !== packet.requestId || p.kind !== "control.reply") return;
+        clearTimeout(timer); socket.off("message", receive);
+        const reply = wire.receive(p, packet.requestId, started.participantId);
+        reply.error ? reject(new Error(reply.error.code)) : resolve(reply.body);
+      }
+      socket.on("message", receive);
+    });
+    socket.send(JSON.stringify(packet)); return result;
+  }
+  attachment = (await call("attach", { token: url.hash.slice(1) })).attachment;
+  return { call, close: () => socket.terminate() };
 }
 
 test("production agents retain uncertain join/chat through process restart and two runtime crashes, then replay and refuse quorum loss", { timeout: 120000 }, async () => {
@@ -97,7 +122,7 @@ test("production agents retain uncertain join/chat through process restart and t
     const aliceTarget = { clusterId, meetingId, name: "Alice" }, alicePath = join(lab.root, "alice.sqlite");
     async function agent(name: string, sessionPath: string) {
       const process = jsonProcess("scripts/participant-agent.ts", { ZOOM_PARTICIPANT_CONFIG: JSON.stringify({ sessionPath, target: { clusterId, meetingId, name },
-        helpers, helperToken: lab.token, routes, helperTimeoutMs: 300, timeoutMs: 500, intervalMs: 60 }) });
+        helpers, helperToken: lab.token, routes, helperTimeoutMs: 300, timeoutMs: 500, intervalMs: 60, browser: { address: "127.0.0.1:0" } }) });
       processes.push(process); await process.event("participant.started"); return process;
     }
     let alice = await agent("Alice", alicePath);
@@ -111,12 +136,22 @@ test("production agents retain uncertain join/chat through process restart and t
     await until("resumed same join", async () => (await alice.request("view")).connection === "connected" ? true : undefined);
     const bob = await agent("Bob", join(lab.root, "bob.sqlite"));
     await until("Bob joined", async () => (await bob.request("view")).connection === "connected" ? true : undefined);
-    const send = await alice.request("submit", { operation: { type: "chat", content: "before failure" } });
+    let browser = await attachBrowser(alice);
+    const send = await browser.call("submit", { operation: { type: "chat", content: "before failure" } });
+    browser.close(); browser = await attachBrowser(alice);
+    try {
+      const view = (await browser.call("view")).view;
+      assert.equal(view.participantId, aliceId);
+      assert.ok(view.commands.some((c: any) => c.id === send.commandId));
+    } finally { browser.close(); }
     await until("both clients replay first chat", async () => (await bob.request("view")).events.some((e: any) => e.payload.content === "before failure") ? true : undefined);
     assert.ok(send.commandId);
     dropType = "chat";
     const lost = await alice.request("submit", { operation: { type: "chat", content: "committed without reply" } });
     await until("chat reply dropped after commit", async () => drops === 2 ? true : undefined);
+    browser = await attachBrowser(alice);
+    try { assert.equal((await browser.call("view")).view.commands.find((c: any) => c.id === lost.commandId).outcome, null); }
+    finally { browser.close(); }
     await alice.crash();
     journal = SessionJournal.open(alicePath, aliceTarget);
     assert.equal(journal.pending()[0].id, lost.commandId);
@@ -137,6 +172,14 @@ test("production agents retain uncertain join/chat through process restart and t
     assert.ok(recovered.cursor.seq > priorCursor);
     assert.deepEqual(recovered.events.map((e: any) => e.seq), [1, 2, 3, 4, 5]);
     assert.equal(recovered.commands.find((c: any) => c.id === lost.commandId).outcome.generation, 1);
+    browser = await attachBrowser(alice);
+    try {
+      const browserView = (await browser.call("view")).view;
+      assert.equal(browserView.participantId, aliceId);
+      assert.deepEqual(browserView.commands, recovered.commands);
+      assert.deepEqual(browserView.events, recovered.events);
+      assert.equal(browserView.cursor.subscriptionRevision, 0);
+    } finally { browser.close(); }
     assert.equal(Object.keys(recovered.observation.state.members).length, 2);
     assert.equal((await pool.query("SELECT count(*) AS n FROM zoom.command_outcomes WHERE meeting_id=$1 AND participant_id=$2 AND command_id=$3", [meetingId, aliceId, lost.commandId])).rows[0].n, "1");
     await assert.rejects(store.execute({ owner: oldOwner, ready: () => true }, { ...originalJoin, id: randomUUID(), operation: { type: "chat", content: "stale" } }), /FENCED/);

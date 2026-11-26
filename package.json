@@ -6,6 +6,7 @@
     "node": ">=24.16"
   },
   "scripts": {
+    "test:browser": "node --test tests/browser-native.test.ts",
     "test:runtimes": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes",
     "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",

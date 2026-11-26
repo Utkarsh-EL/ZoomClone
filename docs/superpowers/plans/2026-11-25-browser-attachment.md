@@ -32,19 +32,19 @@ Files: create client/browser-attachment.ts and tests/browser-attachment.test.ts;
 
 Interfaces: serveBrowserAttachment(session, {address, wire?, timeoutMs?, maxClients?}) returns {origin, url, close}; requests use ControlWire, version-1 bodies and socket-bound {id, revision}. Capture claim/release requires the observed capture revision.
 
-- [ ] Write and run failing security, shared-session, reload, revision and capture-race tests.
-- [ ] Implement bounded HTTP/WebSocket service with static browser assets and shared session delegation.
-- [ ] Run targeted tests and typecheck; commit verified service increment.
+- [x] Write and run failing security, shared-session, reload, revision and capture-race tests.
+- [x] Implement bounded HTTP/WebSocket service with static browser assets and shared session delegation.
+- [x] Run targeted tests and typecheck; commit verified service increment (`e64be83`).
 
 ### Task 2: Agent composition and native browser adapter
 
-Files: client/browser-attachment.js, client/browser-bootstrap.js, client/participant-agent.ts, scripts/participant-agent.ts; tests/browser-process.test.ts and browser verification fixture.
+Files: client/browser-attachment.js, client/browser-bootstrap.js, client/participant-agent.ts, scripts/participant-agent.ts; tests/browser-native.test.ts, tests/browser-attachment.test.ts and tests/participant-process.test.ts.
 
 Interfaces: optional browser configuration on ParticipantAgentConfig; agent.openBrowser() composes exactly its session and wire, idempotent close owns lifecycle. Executable reports the private fragment URL on startup. BrowserAttachment exposes view/submit/capture and never retries uncertain submissions.
 
-- [ ] Write and run failing CLI/browser process tests.
-- [ ] Implement native browser adapter, reload credential handling and agent lifecycle composition.
-- [ ] Verify actual Chromium browser reload with the same CLI process, pending IDs, inbox and capture replacement; commit.
+- [x] Write and run failing CLI/browser process tests.
+- [x] Implement native browser adapter, reload credential handling and agent lifecycle composition.
+- [x] Verify actual Chromium browser reload with the same CLI process, pending IDs, inbox and capture replacement; commit.
 
 ### Task 3: Regression evidence and handoff
 
@@ -57,3 +57,6 @@ Interfaces: optional browser configuration on ParticipantAgentConfig; agent.open
 - Baseline: clean milestone-5 at 5482a89; npm test 56/56. Work in the existing authorized checkout.
 - Decision: capture replacement uses an explicit compare-and-set claim; attaching/reloading alone never starts capture. Old owner receives a revocation notification; future media must also validate the current lease.
 - Decision: serve a diagnostic attachment page for native-browser verification. Full meeting UI/media remains the next increment.
+- Task 1 complete: e64be83; targeted attachment tests 4/4 and typecheck passed after missing-module RED.
+- Task 2 complete: native Chromium 1/1 after missing-startup-URL RED; npm test 61/61 and typecheck passed. Docker suite 16/16 in zoom-storage-3d5bbaba includes attachment submissions, reload, pending outcome and recovered SQL inbox comparison. Native browser subprocesses require sandbox elevation on this host.
+- Ruling: use an 8 MiB bounded local reply and 16-event pages to include all 128 pending command contents under worst-case JSON escaping; the runtime gateway's 1 MiB bound is unchanged.

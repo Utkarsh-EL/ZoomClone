@@ -1,8 +1,7 @@
 import { startParticipant, type ParticipantAgentConfig } from "../client/participant-agent.ts";
 import type { Operation } from "../storage/engine.ts";
 
-// JSON-lines stdin is the headless CLI adapter. A future secured local browser
-// adapter must attach to this same ClientSession, never open another identity.
+// JSON-lines stdin and optional loopback browser use this same ClientSession.
 const output = (value: unknown) => {
   if (process.stdout.writableLength > 2 * 1024 * 1024) { process.exitCode = 1; void stop?.(); return; }
   process.stdout.write(JSON.stringify(value) + "\n");
@@ -21,6 +20,7 @@ try {
   stop = async () => { process.stdin.pause(); await agent.close(); };
   process.once("SIGINT", () => { void stop!(); }); process.once("SIGTERM", () => { void stop!(); });
   process.stdin.once("end", () => { void stop!(); });
+  const browser = config.browser ? await agent.openBrowser() : undefined;
   let buffered = Buffer.alloc(0);
   process.stdin.on("data", (data: Buffer) => {
     buffered = Buffer.concat([buffered, data]);
@@ -43,7 +43,8 @@ try {
     }
     if (buffered.length > 64 * 1024) { output({ error: "INPUT_TOO_LARGE" }); void stop!(); }
   });
-  output({ event: "participant.started", participantId: agent.session.view().participantId, meetingId: config.target.meetingId, time: new Date().toISOString() });
+  output({ event: "participant.started", participantId: agent.session.view().participantId, meetingId: config.target.meetingId,
+    ...(browser ? { browser: { url: browser.url } } : {}), time: new Date().toISOString() });
   await agent.done;
   await stop();
 } catch {
