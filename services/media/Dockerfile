@@ -4,5 +4,6 @@ COPY services/media/package*.json ./
 RUN npm ci --omit=dev
 COPY services/media/kernel.mjs ./
 COPY coordination/wire.ts coordination/logical-clock.ts ./coordination/
+COPY media/kernel-fence.ts ./media/
 USER node
 CMD ["node", "kernel.mjs"]

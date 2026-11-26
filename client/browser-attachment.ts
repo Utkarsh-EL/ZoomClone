@@ -142,7 +142,8 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
             if (!options.experimentalMedia || !record(body.media) || typeof body.media.action !== "string") throw new Error("MEDIA_DISABLED");
             if (mediaPending >= 2) throw new Error("MEDIA_BUSY");
             mediaPending++;
-            const owns = () => !closing && attached.get(socket) === ref && same(capture.owner, ref);
+            const captureRevision = capture.revision;
+            const owns = () => !closing && attached.get(socket) === ref && capture.revision === captureRevision && same(capture.owner, ref);
             void options.experimentalMedia.handle(ref.id, body.media as MediaRequest, owns).then(
               media => { if (attached.get(socket) === ref) reply(socket, packet, { media, capture }); },
               error => { const code = error instanceof Error && /^[A-Z_]{1,64}$/.test(error.message) ? error.message : "MEDIA_UNAVAILABLE"; reply(socket, packet, null, { code, message: code }); },

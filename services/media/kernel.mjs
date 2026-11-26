@@ -4,13 +4,15 @@ import { createServer } from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { createWorker } from 'mediasoup';
 import { ControlWire } from './coordination/wire.ts';
+import { KernelFence } from './media/kernel-fence.ts';
 
 const wire = new ControlWire({ clusterId: process.env.MEDIA_CLUSTER_ID, nodeId: process.env.MEDIA_NODE_ID, incarnation: randomUUID() });
+const fence = new KernelFence({ epoch: wire.identity.incarnation, meetingId: process.env.MEDIA_MEETING_ID, callers: JSON.parse(process.env.MEDIA_CALLERS ?? '[]') });
 const token = Buffer.from(process.env.MEDIA_TOKEN ?? '');
 if (token.length < 64) throw new Error('MEDIA_TOKEN_REQUIRED');
 const worker = await createWorker({ logLevel: 'error' });
 worker.on('died', () => process.exit(1));
-const webRtcServer = await worker.createWebRtcServer({ listenInfos: ['udp', 'tcp'].map(protocol => ({ protocol, ip: '0.0.0.0', announcedAddress: '127.0.0.1', port: Number(process.env.MEDIA_PORT) })) });
+const webRtcServer = await worker.createWebRtcServer({ listenInfos: ['udp', 'tcp'].map(protocol => ({ protocol, ip: '0.0.0.0', announcedAddress: process.env.MEDIA_ANNOUNCED_ADDRESS ?? '127.0.0.1', port: Number(process.env.MEDIA_PORT) })) });
 const router = await worker.createRouter({ mediaCodecs: [
   { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
   { kind: 'video', mimeType: 'video/VP8', clockRate: 90000, parameters: {} },
@@ -21,6 +23,7 @@ const ownerKey = o => JSON.stringify([o.meetingId, o.generation, o.runtimeId, o.
 function closePeer(id) { const p = peers.get(id); if (p) { p.send.close(); p.recv.close(); peers.delete(id); } }
 function transportOptions(t) { return { id: t.id, iceParameters: t.iceParameters, iceCandidates: t.iceCandidates, dtlsParameters: t.dtlsParameters }; }
 async function execute(r) {
+  if (r.action === 'hello') return {};
   if (r.action === 'closePeer') { closePeer(r.peerId); return {}; }
   if (r.action === 'sync') {
     if (!r.owner || !Number.isSafeInteger(r.owner.generation) || !Number.isSafeInteger(r.grantVersion)) throw new Error('INVALID_FENCE');
@@ -88,9 +91,8 @@ const server = createServer(async (request, response) => {
     let bytes = 0; const chunks = [];
     for await (const chunk of request) { bytes += chunk.length; if (bytes > 1024 * 1024) throw new Error('INPUT_LIMIT'); chunks.push(chunk); }
     const raw = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if (raw.nodeId !== process.env.MEDIA_CALLER_ID) throw new Error('UNAUTHORIZED');
     packet = wire.accept(raw);
-    const work = tail.then(() => execute(packet.body)); tail = work.catch(() => {});
+    const work = tail.then(() => { fence.accept(packet); return execute(packet.body); }); tail = work.catch(() => {});
     const value = await work;
     response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(wire.reply(packet, { epoch: wire.identity.incarnation, value })) + '\n');
   } catch (e) {

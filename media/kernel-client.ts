@@ -12,6 +12,7 @@ export function kernelClient(options: { address: string; token: string; identity
     if (!response.ok) { await response.body?.cancel(); throw new Error("SFU_UNAVAILABLE"); }
     const reply = wire.receive(await boundedReply(response), packet.requestId, options.nodeId);
     if (reply.error) throw new Error(reply.error.code);
+    if (!reply.body || typeof reply.body !== "object" || (reply.body as { epoch?: unknown }).epoch !== reply.incarnation) throw new Error("INVALID_MEDIA_REPLY");
     return reply.body;
   };
 }

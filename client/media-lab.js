@@ -16,7 +16,7 @@ export class MediaLab {
   async call(request, opening = false) {
     for (let attempt = 0; ; attempt++) {
       try {
-        const reply = await this.attachment.media(request);
+        const reply = await this.attachment.media({ ...request, ...(!opening ? { epoch: this.epoch } : {}) });
         if (!opening && this.epoch && reply.epoch !== this.epoch) throw new Error('SFU_RESTARTED');
         if (opening) this.epoch = reply.epoch;
         return reply.value;

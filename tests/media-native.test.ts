@@ -60,10 +60,10 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     await until("active media meeting", async () => await controller.tick(meetingId, await availableRuntimes([remote])) === "READY" ? true : undefined);
     const controlPort = await port(), mediaPort = await port();
     storage.docker(["run", "--detach", "--name", name, "--label", `org.zoomclone.lab=${name}`, "--publish", `127.0.0.1:${controlPort}:8080/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/udp`,
-      ...["MEDIA_CLUSTER_ID", "MEDIA_NODE_ID", "MEDIA_CALLER_ID", "MEDIA_TOKEN", "MEDIA_PORT"].flatMap(key => ["--env", key]), "zoomclone-media-feasibility:3.32.2"],
-      { MEDIA_CLUSTER_ID: clusterId, MEDIA_NODE_ID: nodeId, MEDIA_CALLER_ID: identity.nodeId, MEDIA_TOKEN: token, MEDIA_PORT: String(mediaPort) });
+      ...["MEDIA_CLUSTER_ID", "MEDIA_NODE_ID", "MEDIA_MEETING_ID", "MEDIA_CALLERS", "MEDIA_TOKEN", "MEDIA_PORT"].flatMap(key => ["--env", key]), "zoomclone-media-feasibility:3.32.2"],
+      { MEDIA_CLUSTER_ID: clusterId, MEDIA_NODE_ID: nodeId, MEDIA_MEETING_ID: meetingId, MEDIA_CALLERS: JSON.stringify([{ nodeId: runtimeId, incarnation }]), MEDIA_TOKEN: token, MEDIA_PORT: String(mediaPort) });
     container = true;
-    const effect = kernelClient({ address: `http://127.0.0.1:${controlPort}`, token, identity, nodeId });
+    const effect = kernelClient({ address: `http://127.0.0.1:${controlPort}`, token, identity: { clusterId, nodeId: runtimeId, incarnation }, nodeId });
     const room = new MediaRoom(effect), bundle = await readFile(".local/media-lab.js", "utf8");
     for (const person of ["Alice", "Bob"]) {
       const agent = startParticipant({ sessionPath: join(storage.root, `${person}.sqlite`), target: { clusterId, meetingId, name: person }, helpers: routes, helperToken: helpers.token,

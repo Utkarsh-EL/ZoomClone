@@ -104,6 +104,22 @@ test("experimental media binds the socket attachment, current lease and revocati
   } finally { await f.close(); }
 });
 
+test("capture loss and reclaim of the same tab cannot revive an admitted publication", async () => {
+  let finish!: () => void, entered!: () => void;
+  const arrived = new Promise<void>(resolve => { entered = resolve; });
+  const f = await fixture(2000, 8, { bundle: "export {};", revoke: async () => {}, handle: async (_id, _request, owns) => {
+    entered(); await new Promise<void>(resolve => { finish = resolve; }); return { value: owns() };
+  } });
+  try {
+    const a = await f.connect(); await a.attach();
+    await a.call("capture.claim", { captureRevision: 0 });
+    const pending = a.call("media", { media: { action: "produce" } }); await arrived;
+    await a.call("capture.release", { captureRevision: 1 });
+    await a.call("capture.claim", { captureRevision: 2 });
+    finish(); assert.equal((await pending).body.media.value, false);
+  } finally { finish?.(); await f.close(); }
+});
+
 test("reload and CLI share identity, pending command IDs and durable inbox without duplicating join", async () => {
   const f = await fixture();
   try {
