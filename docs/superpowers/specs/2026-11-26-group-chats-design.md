@@ -1,7 +1,7 @@
 # Group chats: agreed product direction and implementation handoff
 
 Date: 2026-11-26
-Status: conversational product decisions recorded; technical planning and implementation remain. Supersedes the public-topic filtering proposal and its six-increment plan. This is a concise product brief, not a claim that a replacement technical plan or group-chat code exists.
+Status: product brief with a [replacement implementation plan](../plans/2026-11-26-group-chats.md). Increment 1's pure group decision engine is implemented/tested; durable group authorization/history, protocol/journal integration and group UI remain unfinished. Supersedes the public-topic filtering proposal and its six-increment plan.
 
 ## Decisions established in conversation
 
@@ -53,8 +53,8 @@ Deliver an actual user flow: create group, invite, join, send/receive, read earl
 
 ## Current status and continuation
 
-No group-chat commands, schema, private permissions, subscriptions or group UI are implemented. The existing app has meeting-wide chat and provisioned supervised microphone/camera/display/playback; meeting-code entry, disconnect grace, supervisor/dashboard and broader network/device deployment remain unfinished. Existing localhost browser/process evidence is not proof of physical-device audio or independent-host resilience.
+`storage/group-engine.ts` implements pure create/invite/join/publish/leave decisions with 12 focused tests; it is not connected to participant ingress or persistence. No durable group schema, server history/delivery permissions, journal/protocol upgrade or group UI exists yet. The existing app has meeting-wide chat and provisioned supervised microphone/camera/display/playback; meeting-code entry, disconnect grace, supervisor/dashboard and broader network/device deployment remain unfinished. Existing localhost browser/process evidence is not proof of physical-device audio or independent-host resilience.
 
-Recommended next model/effort: **GPT-6.1, medium**. Product direction is settled enough to start bounded technical planning; use high only for a specific unresolved authorization/replay/failure interleaving, not automatically because the application is distributed. Work inline and keep verification proportional; no routine multi-agent fan-out is requested.
+Recommended next model/effort: **GPT-6.1, medium**. Continue with increment 2 of the replacement plan: coordinated SQL/protocol/shared recovery integration. Use high only for a specific unresolved authorization/replay/failure interleaving, not automatically because the application is distributed. Work inline and keep verification proportional; no routine multi-agent fan-out is requested.
 
-Continuation: "Continue from the group-chat clarification checkpoint. Read docs/superpowers/specs/2026-11-26-group-chats-design.md and the current handoff/main spec. Replace the superseded topic-filter plan with a concise plan for invite-only group chats: joining is subscribing, sending is publishing, leaving is unsubscribing; current members should preferably see earlier history. Public chats are optional follow-up. Use one supported protocol and preserve the shared recovery journal, original uncertain commands and all existing release/media/readiness/SQL/SFU/local-lease guarantees. Keep revision-zero meeting replay unfiltered without exposing private data. Plan from current code, then implement the first bounded increment inline if no material user-facing question blocks it. Explain consequential choices in conversation; I do not read specs/plans. Use GPT-6.1 medium, focused verification and verified commits; do not execute the old six-task subscription plan."
+Continuation: use the [current handoff's exact next action](../handoffs/2026-11-25-distributed-meeting-redesign.md#exact-next-action-and-effort). Increment 1 is complete; do not repeat its planning or pure engine work. The original next-session checklist above records the authorization and safety requirements; the replacement plan now supplies the task sequence.
