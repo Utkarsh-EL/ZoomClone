@@ -43,8 +43,8 @@ Files: `services/media/`, `media/kernel-client.ts`, `client/media-lab.js`, exper
 
 ### Task 3: Evidence and continuation
 
-- [ ] Run default/typecheck/browser/runtime checks appropriate to changed paths; retain exact native evidence and limits.
-- [ ] Review whole diff with a fresh reviewer, fix reproduced important issues, update handoff/spec/guide and commit.
+- [x] Run default/typecheck/browser/runtime checks appropriate to changed paths; retain exact native evidence and limits.
+- [x] Review whole diff with a fresh reviewer, fix reproduced important issues, update handoff/spec/guide and commit.
 
 ## Execution ledger
 
@@ -57,3 +57,17 @@ Task 1 complete: 3 adapter tests failed with the unimplemented adapter, then pas
 Task 2 complete: `npm run test:media` passed with two distinct native Chromium processes, real SQL/helper/runtime authorization, inbound audio bytes/decoded camera and display frames, native permission denial/dialog rejection/source-ended release, stale grant rejection, server and local lease revocation, SFU crash with successful concurrent chat, explicit transport reconstruction/new epoch, unchanged identity/commands/revision zero, and stopped-runtime refusal. Native body 24.85s, owned storage lab `zoom-storage-b4e2faf1`. Default 86/86, existing native participant UI 1/1 and typecheck passed. The kernel image built successfully.
 
 Observed failures and fixes: DevTools does not accept top-level await in ordinary evaluation (use dynamic import continuation); current-tab dialog selection differs from selected-tab capture (test each native path explicitly); esbuild ancestor reads require elevation in this sandbox. Compressed renewal scheduling exposed explicit pre-effect NOT_READY; the adapter client retries only that rejection with a bound and jitter (RED→GREEN). The harness uses existing production-default 500ms renewal/2000ms readiness, with no production scheduler changes. Compose health can observe the temporary initialization server; the harness now probes the published SQL TCP path before migrations, without replaying any migration or domain command. Explicit stop during pending permission and repeated revocation were reproduced RED→GREEN and fixed with per-source attempts and coalesced cleanup.
+
+Independent review: fresh read-only reviewer inspected `cbc3a47..5a1de88`, ran in-memory lifecycle probes and found two Important issues, no Critical issues: coalescing a revoke across an intervening reopen missed the final close, and distinct unused attachment revocations admitted unbounded cleanup. Both were reproduced RED→GREEN: cleanup now tracks each bounded admitted peer's work revision, coalesces only without intervening work, and skips unused attachments. The reviewer graded reconnect-after-stop server cleanup Minor; regraded Important because a completed canceled publication must tear down its server resource as well as its local track. Reproduced RED→GREEN and fixed through the normal closeProducer path. Default suite after the single fix pass: 89/89 and typecheck passed. Native rerun/evidence recorded below. No second independent review is claimed.
+
+Final verification: `npm run test:media` passed after the fixes, body 25.19s in owned lab `zoom-storage-5b78c4cf`; observed fault-to-reception interval 5.55s including chat checks/Docker restart. Checked `native-final.json` and transcripts retain this run separately from the reviewed implementation's original native evidence. Existing native UI 1/1 and runtime suite 16/16 were run on `5a1de88`; subsequent code changes only affect the experimental media room/controller and their tests, with default/typecheck/native media rerun afterward. No extra production runtime or consensus rerun is claimed.
+
+Review scope rulings (accepted boundaries, with costs):
+
+- Attachment close does not await SFU cleanup; the bounded harness subsequently destroys its owned SFU. A reusable executable must add explicit quiescence. Cost: this bridge alone does not establish shutdown completion of an external media service.
+- SQL transitions after a fresh authorization may overlap its effect until serialized media reconciliation completes, as the spec defines. Cost: SQL commit is not instantaneous physical media revocation.
+- Full runtime-takeover/media-isolation correctness stays separate. Cost: this checkpoint does not establish old-runtime/SFU partition acceptance.
+- Finished UI, automatic reconnect, persisted effect observations, physical devices/audible playback, TURN and school-network preflight remain deferred. Cost: feasibility is not complete product/deployment acceptance.
+- Denied/canceled capture retains the logical grant, enabling explicit retry/release without generating commands. Cost: a participant can hold the grant until an explicit release/leave.
+- Stopped runtime rejects new work; established media can continue under the spec. Cost: runtime unavailability does not guarantee immediate media shutdown.
+- Credential/capability boundaries, exact stop-release identity, late permission results and epoch/unavailable-authority behavior had no additional demonstrated defect. Cost: bounded checks and review do not prove all adversarial or failure interleavings.

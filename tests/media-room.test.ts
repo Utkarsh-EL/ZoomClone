@@ -60,3 +60,27 @@ test("repeated revocation coalesces while a full media queue drains", async () =
   release(); await work; await Promise.all(cleanup);
   assert.equal(effects.filter(action => action === "closePeer").length, 1);
 });
+test("disconnect revocation follows an intervening reopen instead of coalescing before it", async () => {
+  const f = fixture(); let release!: () => void, opened = false, closes = 0;
+  const room = new MediaRoom(async r => {
+    if (r.action === "open") opened = true;
+    if (r.action === "closePeer") { if (++closes === 1) await new Promise<void>(resolve => { release = resolve; }); opened = false; }
+    return {};
+  });
+  await room.handle(f.context, { action: "open" });
+  const first = room.revoke(f.context.peerId);
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  const reopen = room.handle(f.context, { action: "open" }), second = room.revoke(f.context.peerId);
+  release(); await first; await reopen; await second;
+  assert.equal(opened, false); assert.equal(closes, 2);
+});
+test("unused attachment churn cannot enqueue SFU cleanup or block ordinary controls", async () => {
+  const f = fixture(), effects: string[] = []; let release!: () => void;
+  const room = new MediaRoom(async r => { effects.push(r.action); if (r.action === "open") await new Promise<void>(resolve => { release = resolve; }); return {}; });
+  const work = room.handle(f.context, { action: "open" });
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  const cleanup = Array.from({ length: 1000 }, (_, i) => room.revoke(`unused-${i}`));
+  const list = room.handle(f.context, { action: "list" });
+  release(); await work; await Promise.all(cleanup); await list;
+  assert.equal(effects.filter(action => action === "closePeer").length, 0);
+});

@@ -91,7 +91,7 @@ export class MediaLab {
       const producer = await this.publish(source, track, grant);
       const entry = this.capture.tracks.get(source);
       if (entry?.track === track && this.attachment.ownsCapture) entry.producer = producer;
-      else { producer.close(); track.stop(); }
+      else { producer.close(); track.stop(); await this.closeProducer(producer.id).catch(() => {}); }
     }
   }
 }

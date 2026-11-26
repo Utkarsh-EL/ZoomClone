@@ -56,3 +56,15 @@ test('explicit stop during a pending capture prevents its late completion from p
   await f.capture.stop('camera'); finish({ getTracks: () => [track] });
   await assert.rejects(start, /CAPTURE_REVOKED/); assert.equal(track.readyState, 'ended'); assert.deepEqual(f.published, []);
 });
+test('a reconnect publication completing after Stop also closes its server producer', async () => {
+  const f = fixture(), track = f.track(), media = new MediaLab(f.attachment), closed = [];
+  const entry = { track, grant: null, producer: { id: 'old' } }; media.capture.tracks.set('camera', entry);
+  media.open = async () => {}; media.call = async request => { closed.push(request); };
+  let finish;
+  media.publish = () => new Promise(resolve => { finish = resolve; });
+  const reconnect = media.reconnect();
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  await media.capture.stop('camera');
+  finish({ id: 'late', close() {} }); await reconnect;
+  assert.ok(closed.some(request => request.action === 'closeProducer' && request.producerId === 'late'));
+});
