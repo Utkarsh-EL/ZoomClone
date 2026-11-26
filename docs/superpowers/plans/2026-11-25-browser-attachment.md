@@ -48,8 +48,8 @@ Interfaces: optional browser configuration on ParticipantAgentConfig; agent.open
 
 ### Task 3: Regression evidence and handoff
 
-- [ ] Run npm test, npm run typecheck and npm run test:runtimes; inspect outputs.
-- [ ] Obtain a fresh whole-change review, fix important findings with regressions and rerun affected checks.
+- [x] Run npm test, npm run typecheck and npm run test:runtimes; inspect outputs.
+- [x] Obtain a fresh whole-change review, fix important findings with regressions and rerun affected checks. Review returned two confirmed findings before its final report was interrupted; author completed the remaining pass.
 - [ ] Update docs/client-sessions.md, current spec, handoff and evidence; commit.
 
 ## Execution ledger
@@ -60,3 +60,6 @@ Interfaces: optional browser configuration on ParticipantAgentConfig; agent.open
 - Task 1 complete: e64be83; targeted attachment tests 4/4 and typecheck passed after missing-module RED.
 - Task 2 complete: native Chromium 1/1 after missing-startup-URL RED; npm test 61/61 and typecheck passed. Docker suite 16/16 in zoom-storage-3d5bbaba includes attachment submissions, reload, pending outcome and recovered SQL inbox comparison. Native browser subprocesses require sandbox elevation on this host.
 - Ruling: use an 8 MiB bounded local reply and 16-event pages to include all 128 pending command contents under worst-case JSON escaping; the runtime gateway's 1 MiB bound is unchanged.
+- Final review: independent reviewer reproduced browser clock exhaustion and rejected-upgrade shutdown retention. Both were verified RED→GREEN and fixed. The reviewer did not deliver a final full assessment; author completed a final lifecycle/protocol pass. No other findings are claimed from that review.
+- Final fixes: reject browser Lamport jumps more than 1024 ahead before shared-clock observation; contain reply/event failure. Destroy rejected upgrades after response flush, track every raw TCP socket through shutdown and enforce an absolute pre-upgrade deadline. Regression tests cover all three paths and an 8 MiB reply with 128 command records/16 escaped events. One raw-socket test initially treated an expected ECONNRESET as failure; it now waits for close directly.
+- Final verification: npm test 65/65; attachment 9/9; typecheck passed; native Chrome 1/1; repeated real runtime suite 16/16. Production Raft/SQL/readiness/retry paths were not modified.

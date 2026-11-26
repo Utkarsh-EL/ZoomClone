@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import type { Socket } from "node:net";
 import WebSocket, { WebSocketServer } from "ws";
 import { ControlWire, UUID_PATTERN, type Envelope } from "../coordination/wire.ts";
 import { fields, participantTimeout, participantURL, record } from "../coordination/participant-protocol.ts";
@@ -10,7 +11,7 @@ import type { ClientSession } from "./client-session.ts";
 export interface Attachment { id: string; revision: number }
 export interface CaptureLease { revision: number; owner: Attachment | null }
 export interface BrowserOptions { address: string; wire?: ControlWire; timeoutMs?: number; maxClients?: number }
-const PROTOCOL = "zoom.attachment.v1", OUTPUT_BYTES = 8 * 1024 * 1024;
+const PROTOCOL = "zoom.attachment.v1", OUTPUT_BYTES = 8 * 1024 * 1024, MAX_CLOCK_AHEAD = 1024;
 const same = (a: Attachment | null, b: Attachment) => a?.id === b.id && a.revision === b.revision;
 
 /** Local capability boundary only. Runtime readiness and SQL authorization stay
@@ -35,18 +36,24 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   let origin = "", host = "", closing = false, revision = 0;
   let capture: CaptureLease = { revision: 0, owner: null };
   const attached = new Map<WebSocket, Attachment>();
+  const connections = new Map<Socket, NodeJS.Timeout>();
   function send(socket: WebSocket, packet: unknown): void {
     const text = JSON.stringify(packet), bytes = Buffer.byteLength(text);
     if (bytes > OUTPUT_BYTES || socket.bufferedAmount + bytes > OUTPUT_BYTES) { socket.terminate(); return; }
     if (socket.readyState === WebSocket.OPEN) socket.send(text, error => { if (error) socket.terminate(); });
   }
+  function reply(socket: WebSocket, request: Envelope, body: unknown, error?: Envelope["error"]) {
+    try { send(socket, wire.reply(request, body, error)); } catch { socket.terminate(); }
+  }
   function changeCapture(owner: Attachment | null) {
     capture = { revision: capture.revision + 1, owner };
-    const event = { ...wire.request({ version: 1, event: "capture", capture }), kind: "control.event" };
-    for (const socket of attached.keys()) send(socket, event);
+    try {
+      const event = { ...wire.request({ version: 1, event: "capture", capture }), kind: "control.event" };
+      for (const socket of attached.keys()) send(socket, event);
+    } catch { for (const socket of attached.keys()) socket.terminate(); }
   }
   const server = createServer((request, response) => {
-    const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
+    const headers = { "Connection": "close", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" };
     if (request.headers.host !== host || (request.headers.origin !== undefined && request.headers.origin !== origin)) {
       response.writeHead(403, headers).end(); return;
@@ -59,13 +66,18 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024, perMessageDeflate: false,
     handleProtocols: protocols => protocols.has(PROTOCOL) ? PROTOCOL : false });
   server.maxConnections = 64; server.headersTimeout = timeout; server.requestTimeout = timeout;
-  server.on("connection", socket => { socket.setTimeout(timeout, () => socket.destroy()); socket.on("error", () => {}); });
+  server.on("connection", socket => {
+    const headers = setTimeout(() => socket.destroy(), timeout); connections.set(socket, headers);
+    socket.once("close", () => { clearTimeout(headers); connections.delete(socket); });
+    socket.setTimeout(timeout, () => socket.destroy()); socket.on("error", () => {});
+  });
   server.on("upgrade", (request, socket, head) => {
     if (closing || request.method !== "GET" || request.url !== "/v1/attachment" || request.headers.host !== host
       || request.headers.origin !== origin || request.headers["sec-websocket-protocol"] !== PROTOCOL) {
-      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"); return;
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", () => socket.destroy()); return;
     }
-    if (sockets.clients.size >= maxClients) { socket.end("HTTP/1.1 503 Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"); return; }
+    if (sockets.clients.size >= maxClients) { socket.end("HTTP/1.1 503 Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", () => socket.destroy()); return; }
+    clearTimeout(connections.get(request.socket));
     sockets.handleUpgrade(request, socket, head, ws => sockets.emit("connection", ws));
   });
   sockets.on("connection", socket => {
@@ -87,10 +99,14 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
         if (!attached.has(socket)) {
           const supplied = Buffer.from(typeof raw.body.token === "string" ? raw.body.token : "");
           if (raw.body.action !== "attach" || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-            send(socket, wire.reply(raw as unknown as Envelope, null, { code: "UNAUTHORIZED", message: "UNAUTHORIZED" })); socket.close(1008); return;
+            reply(socket, raw as unknown as Envelope, null, { code: "UNAUTHORIZED", message: "UNAUTHORIZED" }); socket.close(1008); return;
           }
         }
         if (identity && (raw.nodeId !== identity.nodeId || raw.incarnation !== identity.incarnation || (raw.lamport as number) <= lamport)) throw new Error("STALE_FRAME");
+        // This browser incarnation has only this one agent peer and at most 32
+        // outstanding calls. Reject implausible jumps before touching the shared
+        // helper/runtime clock; reserve space for replies and revocation events.
+        if ((raw.lamport as number) > wire.logicalTime + MAX_CLOCK_AHEAD || wire.logicalTime >= Number.MAX_SAFE_INTEGER - 4096) throw new Error("INVALID_CLOCK");
         packet = wire.accept(raw); lamport = packet.lamport;
       } catch { socket.terminate(); return; }
       idle.refresh();
@@ -119,11 +135,11 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
             result = { capture };
           } else throw new Error("INVALID_REQUEST");
         }
-        send(socket, wire.reply(packet, result));
+        reply(socket, packet, result);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "INVALID_REQUEST";
         const code = /^[A-Z_]{1,64}$/.test(message) ? message : "INVALID_REQUEST";
-        send(socket, wire.reply(packet, null, { code, message: code }));
+        reply(socket, packet, null, { code, message: code });
       }
     });
   });
@@ -137,6 +153,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   return { origin, url: `${origin}/#${token}`, close(): Promise<void> {
     return closed ??= (async () => {
       closing = true; for (const socket of sockets.clients) socket.terminate();
+      for (const socket of connections.keys()) socket.destroy();
       server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
       await new Promise<void>(resolve => sockets.close(() => resolve()));
     })();

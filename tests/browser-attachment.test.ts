@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { request } from "node:http";
+import { connect as connectTCP } from "node:net";
 import { test } from "node:test";
 import WebSocket from "ws";
 import { serveBrowserAttachment } from "../client/browser-attachment.ts";
@@ -30,22 +31,24 @@ async function fixture(timeoutMs = 2000, maxClients = 8) {
     const events: any[] = [];
     socket.on("message", data => { const p = JSON.parse(data.toString()); if (p.kind === "control.event") events.push(p); });
     let attachment: unknown;
-    async function call(action: string, body: object = {}) {
+    async function call(action: string, body: object = {}, stamp?: number) {
       const packet = clientWire.request({ version: 1, action, ...(attachment ? { attachment } : {}), ...body });
+      if (stamp !== undefined) packet.lamport = stamp;
       const reply = new Promise<any>((resolve, reject) => {
-        const timer = setTimeout(() => { cleanup(); reject(new Error("REPLY_TIMEOUT")); }, 2000);
+        const timer = setTimeout(() => { cleanup(); reject(new Error("REPLY_TIMEOUT")); }, Math.max(2000, timeoutMs));
+        const closed = () => { cleanup(); reject(new Error("ATTACHMENT_CLOSED")); };
         const receive = (data: WebSocket.RawData) => {
           const p = JSON.parse(data.toString()); if (p.requestId !== packet.requestId || p.kind !== "control.reply") return;
           cleanup();
           try { resolve(clientWire.receive(p, packet.requestId, wire.identity.nodeId)); } catch (e) { reject(e); }
         };
-        function cleanup() { clearTimeout(timer); socket.off("message", receive); }
-        socket.on("message", receive);
+        function cleanup() { clearTimeout(timer); socket.off("message", receive); socket.off("close", closed); }
+        socket.on("message", receive); socket.once("close", closed);
       });
       socket.send(JSON.stringify(packet)); return reply;
     }
-    return { socket, events, call, async attach(secret = token) {
-      const p = await call("attach", { token: secret }); attachment = p.body?.attachment; return p;
+    return { socket, events, call, async attach(secret = token, stamp?: number) {
+      const p = await call("attach", { token: secret }, stamp); attachment = p.body?.attachment; return p;
     } };
   }
   return { session, journal, server, target, token, connect, wire, async close() {
@@ -161,4 +164,64 @@ test("agent owns one browser lifecycle, rotates capability on restart and closes
     await assert.rejects(failed.openBrowser(), /ADDRESS/);
     await failed.close();
   } finally { await agent.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("attachment rejects out-of-range browser clock before advancing the shared agent clock", async () => {
+  const f = await fixture();
+  try {
+    const browser = await f.connect(), before = f.wire.logicalTime;
+    const closed = once(browser.socket, "close");
+    // Ignore the request waiter's timeout: the invalid attachment must close
+    // without accepting the remote time or emitting a reply.
+    void browser.attach(f.token, Number.MAX_SAFE_INTEGER - 4).catch(() => {});
+    await Promise.race([closed, new Promise((_, reject) => setTimeout(() => reject(new Error("CLOCK_FRAME_ACCEPTED")), 300))]);
+    assert.equal(f.wire.logicalTime, before);
+    const valid = await f.connect(); await valid.attach();
+    assert.equal((await valid.call("view")).body.view.participantId, f.session.view().participantId);
+  } finally { await f.close(); }
+});
+
+test("shutdown destroys rejected upgrades even when the peer keeps its write side open", { timeout: 2000 }, async () => {
+  const f = await fixture(100), url = new URL(f.server.origin);
+  const socket = connectTCP({ host: url.hostname, port: Number(url.port), allowHalfOpen: true });
+  socket.on("error", () => {});
+  let writes: NodeJS.Timeout | undefined;
+  try {
+    await once(socket, "connect");
+    const response = once(socket, "data");
+    socket.write(`GET /v1/attachment HTTP/1.1\r\nHost: ${url.host}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nOrigin: https://foreign.example\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==\r\nSec-WebSocket-Protocol: zoom.attachment.v1\r\n\r\n`);
+    assert.match(String((await response)[0]), /403/);
+    writes = setInterval(() => { if (!socket.destroyed) socket.write("x"); }, 20);
+    await Promise.race([f.server.close(), new Promise((_, reject) => setTimeout(() => reject(new Error("SHUTDOWN_BLOCKED")), 300))]);
+  } finally { clearInterval(writes); socket.destroy(); await f.close(); }
+});
+
+test("partial HTTP headers have an absolute deadline even if bytes continue arriving", async () => {
+  const f = await fixture(100), url = new URL(f.server.origin);
+  const socket = connectTCP({ host: url.hostname, port: Number(url.port) }); socket.on("error", () => {});
+  let writes: NodeJS.Timeout | undefined;
+  try {
+    await once(socket, "connect"); const closed = new Promise<void>(resolve => socket.once("close", () => resolve()));
+    socket.write("GET / HTTP/1.1\r\nHost: "); writes = setInterval(() => socket.write("a"), 20);
+    await Promise.race([closed, new Promise((_, reject) => setTimeout(() => reject(new Error("HEADERS_NOT_EXPIRED")), 350))]);
+  } finally { clearInterval(writes); socket.destroy(); await f.close(); }
+});
+
+test("bounded local views retain all pending contents and a full page under worst-case JSON escaping", async () => {
+  const f = await fixture(10000);
+  try {
+    const content = "\u0001".repeat(8191) + "x";
+    for (let i = 0; i < 127; i++) f.session.submit({ type: "chat", content });
+    f.journal.recordReplay(f.journal.cursor(), { meetingId: f.target.meetingId, code: "test", generation: 1,
+      runtimeId: randomUUID(), incarnation: randomUUID(), attemptId: randomUUID(), phase: "ACTIVE", observedAt: new Date().toISOString(),
+      watermark: 16, scannedWatermark: 16, state: emptyState(), events: Array.from({ length: 16 }, (_, i) => ({
+        seq: i + 1, lamport: i + 1, generation: 1, kind: "chat", payload: { participantId: randomUUID(), content },
+      })) });
+    const browser = await f.connect(); await browser.attach();
+    const view = (await browser.call("view", { limit: 200 })).body.view;
+    assert.equal(view.commands.length, 128);
+    assert.equal(view.commands.at(-1).operation.content, content);
+    assert.equal(view.events.length, 16);
+    assert.equal(view.events.at(-1).payload.content, content);
+  } finally { await f.close(); }
 });
