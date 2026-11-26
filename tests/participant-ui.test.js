@@ -85,6 +85,35 @@ test("a submit is single-flight, retains the returned ID and obeys a CLI pending
   assert.equal(await model.submit({ type: "chat", content: "after leave" }), null);
 });
 
+test("accepted submit waits for a post-acceptance view before enabling another share request", async () => {
+  const { model, attachment } = fixture(); await model.refresh();
+  const original = attachment.view.bind(attachment);
+  let unblock;
+  attachment.view = async (...args) => {
+    const snapshot = await original(...args);
+    await new Promise(resolve => { unblock = resolve; }); return snapshot;
+  };
+  const reading = model.refresh();
+  await Promise.resolve();
+  const submitting = model.submit({ type: "request-share" });
+  attachment.view = original; unblock();
+  await Promise.all([reading, submitting]);
+  assert.equal(model.sharePending, true);
+  assert.equal(await model.submit({ type: "request-share" }), null);
+  assert.equal(attachment.submissions.length, 1);
+});
+
+test("failed post-acceptance view keeps actions disabled until shared commands can be inspected", async () => {
+  const { model, attachment } = fixture(); await model.refresh();
+  const original = attachment.view.bind(attachment);
+  attachment.view = async () => { throw new Error("READ_FAILED"); };
+  assert.equal(await model.submit({ type: "request-share" }), "command-1");
+  assert.equal(model.canSubmit, false);
+  assert.equal(await model.submit({ type: "request-share" }), null);
+  attachment.view = original; await model.refresh();
+  assert.equal(model.sharePending, true); assert.equal(attachment.submissions.length, 1);
+});
+
 test("lost submit reply preserves uncertainty through reload and never automatically resubmits", async () => {
   const f = fixture(); await f.model.refresh();
   const submit = f.attachment.submit.bind(f.attachment);

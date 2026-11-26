@@ -108,6 +108,10 @@ test("native browser reload and CLI retain one identity, pending IDs, inbox and 
       return view.commands.find((c: any) => c.operation.content === "browser pending") as { id: string } | undefined;
     }, 3000);
     await until("pending ID rendered", async () => await evaluate(first, `document.querySelector('#commands').textContent.includes('${browserPending.id}')`) ? true : undefined, 2000);
+    await evaluate(first, `(() => { const d=Array.from(document.querySelectorAll('#commands details')).find(d=>d.textContent.includes('${browserPending.id}')); d.open=true; d.querySelector('summary').focus(); })()`);
+    const laterCli = await cli("submit", { operation: { type: "chat", content: "later CLI traffic" } });
+    await until("new CLI command rendered", async () => await evaluate(first, `document.querySelector('#commands').textContent.includes('${laterCli.commandId}')`) ? true : undefined, 2000);
+    assert.equal(await evaluate(first, `(() => { const d=Array.from(document.querySelectorAll('#commands details')).find(d=>d.textContent.includes('${browserPending.id}')); return d.open && d.contains(document.activeElement); })()`), true, "command review stays open and focused during other traffic");
     await evaluate(first, "document.querySelector('#capture-claim').click()");
     await until("UI capture owner", async () => await evaluate(first, "attachment.ownsCapture") ? true : undefined, 2000);
     const claim = { capture: await evaluate(first, "attachment.captureState") };
@@ -165,7 +169,7 @@ test("native browser reload and CLI retain one identity, pending IDs, inbox and 
     child.stdin.end(); await exited;
     await until("browser observes agent shutdown", async () => await evaluate(second, "attachment.readyState === 'closed'") ? true : undefined, 2000);
     const reopened = SessionJournal.open(path, target);
-    try { assert.equal(reopened.credential().participantId, participantId); assert.equal(reopened.pending().length, 5); assert.equal(reopened.pending().filter(c => c.operation.type === "leave").length, 1); assert.equal(reopened.left, false); }
+    try { assert.equal(reopened.credential().participantId, participantId); assert.equal(reopened.pending().length, 6); assert.equal(reopened.pending().filter(c => c.operation.type === "leave").length, 1); assert.equal(reopened.left, false); }
     finally { reopened.close(); }
     // A deterministic engine transport exercises resolved UI actions. This is
     // browser/session evidence; real SQL/runtime fences have their own suite.
@@ -213,7 +217,7 @@ test("native browser reload and CLI retain one identity, pending IDs, inbox and 
       assert.equal(interactiveJournal.left, true);
       assert.equal(await evaluate(active, "document.querySelector('#share-request').disabled && document.querySelector('#capture-claim').disabled"), true);
     } finally { controller.abort(); await running; await interactiveServer.close(); interactiveJournal.close(); }
-    console.log(JSON.stringify({ browser: executable, checks: ["native UI controls", "history paging/reload", "CLI identity and pending IDs", "untrusted text", "capture replacement/release", "queued share cancellation", "resolved request/grant/release", "explicit pending/resolved leave", "shutdown", ...(process.env.ZOOM_UI_EVIDENCE ? ["desktop/mobile overflow and screenshots"] : [])], participantId }));
+    console.log(JSON.stringify({ browser: executable, checks: ["native UI controls", "history paging/reload", "CLI identity and pending IDs", "command review retains open state/focus during CLI traffic", "untrusted text", "capture replacement/release", "queued share cancellation", "resolved request/grant/release", "interrupted UI reply/reload/manual review without resubmit", "explicit pending/resolved leave", "shutdown", ...(process.env.ZOOM_UI_EVIDENCE ? ["desktop/mobile overflow and screenshots"] : [])], participantId }));
   } finally {
     socket?.terminate();
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await exited;

@@ -9,6 +9,7 @@ export class ParticipantModel extends EventTarget {
   captureBusy = false;
   uncertain = null;
   error = "";
+  readFailed = false;
   lastCommandId = null;
   #attachment;
   #load;
@@ -27,7 +28,7 @@ export class ParticipantModel extends EventTarget {
   get attached() { return !this.#disposed && this.#attachment.readyState === "attached"; }
   get leaving() { return this.view?.commands.some(c => c.operation.type === "leave" && !c.outcome) ?? false; }
   get left() { return this.view?.left || this.view?.connection === "left"; }
-  get canSubmit() { return !!this.view && this.attached && !this.busy && !this.uncertain && !this.leaving && !this.left; }
+  get canSubmit() { return !!this.view && this.attached && !this.readFailed && !this.busy && !this.uncertain && !this.leaving && !this.left; }
   get state() { return this.view?.observation?.state; }
   get ownShare() {
     const id = this.view?.participantId;
@@ -65,8 +66,10 @@ export class ParticipantModel extends EventTarget {
       const desired = this.followLatest ? Math.max(0, view.cursor.seq - 16) : this.after;
       if (after !== desired) { after = desired; ({ view } = await this.#attachment.view(after, 16)); }
       if (this.#disposed) return;
-      this.after = after; this.view = view; this.#persist(); this.#emit();
-    } catch (error) { if (!this.#disposed) { this.error = error.message; this.#emit(); } }
+      this.after = after; this.view = view;
+      if (this.readFailed) this.error = "";
+      this.readFailed = false; this.#persist(); this.#emit();
+    } catch (error) { if (!this.#disposed) { this.readFailed = true; this.error = `Unable to refresh shared commands: ${error.message}. Actions are paused until a view is available.`; this.#emit(); } }
   }
   async #navigate(position) {
     if (this.paging || this.#disposed) return;
@@ -94,6 +97,9 @@ export class ParticipantModel extends EventTarget {
     try {
       const { commandId } = await this.#attachment.submit(operation);
       this.lastCommandId = commandId; this.uncertain = null; this.#persist();
+      // A poll may have snapshotted before local acceptance. Drain it, then
+      // observe the accepted command before reopening mutation controls.
+      await this.#refreshing;
       await this.refresh(); return commandId;
     } catch (error) {
       this.error = `${error.message}. The operation may already be saved. Review commands before trying again.`;

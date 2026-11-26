@@ -5,6 +5,7 @@ const $ = id => document.getElementById(id);
 const text = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
 const node = (tag, content, className) => { const el = document.createElement(tag); el.textContent = content; if (className) el.className = className; return el; };
 const signatures = new Map();
+const commandNodes = new Map();
 function list(id, data, render) {
   const signature = JSON.stringify(data);
   if (signatures.get(id) === signature) return false;
@@ -81,12 +82,30 @@ try {
     $("capture-release").disabled = !model.canSubmit || model.captureBusy;
     const pending = v.commands.filter(c => !c.outcome).length;
     text("command-status", `${pending} pending · ${v.commands.length - pending} outcomes`);
-    list("commands", v.commands, () => [...v.commands].reverse().map(command => {
-      const li = document.createElement("li"), details = document.createElement("details"), summary = document.createElement("summary");
-      summary.append(node("span", labels[command.operation.type] ?? command.operation.type), node("span", command.outcome?.code ?? "Pending", `command-state ${!command.outcome ? "pending" : command.outcome.code === "OK" ? "" : "rejected"}`), node("code", command.id, "command-id"));
-      details.append(summary, node("pre", JSON.stringify({ operation: command.operation, outcome: command.outcome }, null, 2)));
-      li.append(details); return li;
-    }));
+    // Keep keyed command nodes so CLI/outcome updates cannot interrupt a
+    // participant inspecting original contents or moving through summaries.
+    const retained = new Set(v.commands.map(c => c.id));
+    for (const [id, element] of commandNodes) if (!retained.has(id)) { element.remove(); commandNodes.delete(id); }
+    let previous = null;
+    for (const command of [...v.commands].reverse()) {
+      let li = commandNodes.get(command.id);
+      if (!li) {
+        li = document.createElement("li");
+        const details = document.createElement("details"), summary = document.createElement("summary");
+        summary.append(node("span", labels[command.operation.type] ?? command.operation.type), node("span", "", "command-state"), node("code", command.id, "command-id"));
+        details.append(summary, document.createElement("pre")); li.append(details); commandNodes.set(command.id, li);
+      }
+      const signature = JSON.stringify(command);
+      if (li.dataset.record !== signature) {
+        li.dataset.record = signature;
+        const status = li.querySelector(".command-state"); status.textContent = command.outcome?.code ?? "Pending";
+        status.className = `command-state ${!command.outcome ? "pending" : command.outcome.code === "OK" ? "" : "rejected"}`;
+        li.querySelector("pre").textContent = JSON.stringify({ operation: command.operation, outcome: command.outcome }, null, 2);
+      }
+      const expected = previous ? previous.nextElementSibling : $("commands").firstElementChild;
+      if (li !== expected) $("commands").insertBefore(li, expected);
+      previous = li;
+    }
     const observation = v.observation;
     text("snapshot-status", observation ? `Last meeting snapshot: ${observation.observedAt} · event watermark ${observation.watermark}. Local inbox through ${v.cursor.seq}. ${v.connection !== "connected" || !model.attached ? "Retained state may be out of date." : ""}` : "No meeting snapshot yet. Your agent is connecting; saved commands remain pending.");
     const details = { Participant: v.participantId, Meeting: v.meetingId, Cluster: v.clusterId, "Subscription revision": "0 · all meeting events", "Local attachment": `${attachment.attachment.id} · revision ${attachment.attachment.revision}`, "Capture revision": String(attachment.captureState.revision) };
