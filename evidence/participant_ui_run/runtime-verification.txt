@@ -1,0 +1,58 @@
+npm run test:runtimes
+PostgreSQL evidence lab: zoom-storage-4378ecef
+✔ database bootstrap is explicit, durable, and bound to the cluster (314.839ms)
+✔ fences reject old owners, same-generation mismatches, late activation and CLOSED recovery (187.5135ms)
+✔ screen handoff commits state, contiguous events, stable outcome and reconciliation intention together (208.1216ms)
+✔ a fence lock blocks mutations but not consistent reads or another meeting (929.8029ms)
+✔ old-command/takeover races have one fenced order and a durable retry outcome (201.7061ms)
+✔ failed handoff rolls back state, sequence, outcome and media intention (200.6646ms)
+✔ in-flight caller mutation cannot redirect a command outside its locked meeting (159.3389ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3060.247
+✔ paused client loses its idle transaction lock; recovery never bypasses the fence (2909.9201ms)
+✔ restricted inspector reads without the fence and cannot expose credentials or write (360.5948ms)
+✔ failed new-lab readiness cleans only its owned service and retains the volume (6195.0823ms)
+✔ PostgreSQL restart retains identity, ownership, events and stable outcomes (3256.4461ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13091.966
+✔ activation resumes after every durable boundary and fences a returning owner (6448.9468ms)
+✔ lost replies after each Raft and SQL commit resolve the same attempt (1677.487ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8580.8262
+✔ independent remote runtimes discover helpers, renew, survive leader change and recover retained outcomes after two crashes (8084.624ms)
+✔ terminal registration conflict releases the runtime listener and database pools (841.3091ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9617.4477
+✔ production agents retain uncertain join/chat through process restart and two runtime crashes, then replay and refuse quorum loss (12872.9381ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13465.7938

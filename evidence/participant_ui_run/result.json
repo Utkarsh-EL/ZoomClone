@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "base": "e4ded77",
+  "implementationHead": "f2a330e",
+  "increments": [
+    "a310d9f: bounded participant model, paging and guarded actions",
+    "5da8e94: participant interface and native UI integration",
+    "f2a330e: post-acceptance observation and command review continuity fixes"
+  ],
+  "verification": {
+    "npm test": { "passed": 75, "failed": 0, "uiModelTests": 10, "attachmentTests": 9, "transcript": "unit-verification.txt" },
+    "npm run typecheck": { "result": "passed", "transcript": "typecheck-verification.txt" },
+    "npm run test:browser": { "passed": 1, "failed": 0, "browser": "native headless Google Chrome", "transcript": "browser-verification.txt" },
+    "npm run test:runtimes": {
+      "passed": 16, "failed": 0, "storage": 7, "storageFaults": 4, "recovery": 2, "runtimeProcesses": 2, "participantProcesses": 1,
+      "head": "5da8e94", "ownedDockerLab": "zoom-storage-4378ecef", "participantScenarioMs": 12872.9381,
+      "transcript": "runtime-verification.txt",
+      "scope": "Later review fixes modify browser display/model JavaScript and tests only; default/native suites rerun afterward. No later runtime rerun claimed."
+    },
+    "screenshots": {
+      "desktop": { "file": "desktop.png", "width": 1440 },
+      "mobile": { "file": "mobile.png", "width": 390 },
+      "scope": "Synthetic retained observations from the production offline-agent fixture, including long/untrusted content. Two bounded inspection rounds; all captures opened and checked. Horizontal overflow assertions passed. Captured before nonvisual review fixes; reviewer required no further screenshot round."
+    },
+    "permissions": "Native Chrome and Docker checks used sandbox elevation.",
+    "consensusOnlySuite": "not rerun; no Go/Raft changes"
+  },
+  "coverage": [
+    "Roster and retained snapshot freshness separate from local/backend connection status",
+    "At most 16 unfiltered events per visible page; older/newer/latest; local tab-scoped display position across reload without durable cursor changes",
+    "Actual native UI chat submit shares the production agent/CLI participant ID, pending command IDs, initial join and durable inbox",
+    "Pending/outcome IDs and immutable command contents, including keyboard/open-details continuity during other CLI traffic",
+    "Interrupted UI acceptance reply retains a guard across reload and requires deliberate review; no automatic resubmission",
+    "Deferred pre-acceptance read cannot reopen share controls without a fresh view; failed refresh keeps actions paused",
+    "Share queue/cancel uses the original observed request ID; deterministic ClientSession/engine fixture resolves request/grant/release",
+    "Explicit pending and resolved leave; tab reload/shutdown never synthesizes domain leave",
+    "Local capture claim/replacement/release, second-tab revocation and stale lease safeguards retained",
+    "UTF-8 chat byte limit, untrusted text escaping, long names/content and responsive desktop/mobile layout",
+    "Existing production helper/PostgreSQL/runtime recovery, uncertain outcomes, SQL fences, restart/lock races, discovery, quorum refusal, readiness and retry jitter"
+  ],
+  "review": {
+    "range": "e4ded77..5da8e94",
+    "status": "Independent read-only code/UI review completed; two Important issues reproduced RED and fixed GREEN. No second independent fix-diff verdict claimed.",
+    "visualDisposition": "fix: visual composition suitable at supplied viewport sizes; two behavioral fixes required, no rebuild or further screenshot round warranted",
+    "fixed": [
+      "Accepted submit reused a pre-acceptance read and could enable another share request; drain old read then obtain a fresh view, with failed-view mutation gate",
+      "Whole command-list replacement collapsed details and discarded keyboard focus; retain/reconcile command nodes by command ID"
+    ],
+    "deferredMinor": "Departed historical authors can fall back to short participant IDs because live snapshots omit their names.",
+    "limits": [
+      "Actual media/capture permissions/SFU/playback explicitly deferred; logical grants/leases remain accurately labeled",
+      "Subscriptions and disconnect grace explicitly separate; revision zero stays unfiltered",
+      "Screenshots use synthetic retained state, with real SQL/runtime behavior tested separately",
+      "Complete screen-reader announcements and keyboard traversal not independently exercised; native command-summary focus regression passed",
+      "Impeccable engine/detector unavailable; manual screenshots and independent visual review used",
+      "Final fixes validated by reproduced regressions and passing suites rather than second independent review"
+    ]
+  },
+  "limits": [
+    "No actual camera/microphone/screen capture, playback, SFU integration or media safety claim",
+    "No topics/filtering under revision zero, disconnect-grace policy, meeting-code entry, supervisor/dashboard or complete proxy/network deployment",
+    "Runtime routes/incarnations remain explicitly provisioned; local journal credentials and attachment startup URLs remain private plaintext capabilities",
+    "Tab storage holds display position/uncertainty only; if unavailable those aids are memory-only",
+    "Native resolved actions use a deterministic engine transport and are not SQL fencing evidence",
+    "Only loopback attachment transport; no public-network, whole-machine or disk-failure coverage"
+  ]
+}

@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-26T03:53:01.423Z",
+  "title": "Design System: ZoomClone Participant",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Warm canvas"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White surface"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Forest ink"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted green gray"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Soft divider"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Deep green"
+      },
+      "hover": {
+        "role": "primary",
+        "displayName": "Pale green hover"
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Amber state"
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Red state"
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control stroke"
+      },
+      "control-active": {
+        "role": "primary",
+        "displayName": "Pale green pressed"
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Deep green hover"
+      },
+      "danger-hover": {
+        "role": "semantic",
+        "displayName": "Deep red hover"
+      },
+      "notice-bg": {
+        "role": "semantic",
+        "displayName": "Warm notice fill"
+      },
+      "notice-ink": {
+        "role": "semantic",
+        "displayName": "Warm notice text"
+      },
+      "notice-border": {
+        "role": "semantic",
+        "displayName": "Warm notice stroke"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Meeting headline",
+        "purpose": "Meeting identity."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Conversation, participant and control section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Messages and controls."
+      },
+      "label": {
+        "displayName": "Field label",
+        "purpose": "Visible message field label."
+      },
+      "small": {
+        "displayName": "Small text",
+        "purpose": "Helper copy, system events, status and footer."
+      },
+      "detail": {
+        "displayName": "Detail",
+        "purpose": "Page status, tags and command metadata."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background-color 150ms ease-out",
+        "purpose": "Enabled button state feedback; disabled under prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack-workspace",
+        "value": "900px"
+      },
+      {
+        "name": "narrow-layout",
+        "value": "540px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "History, sharing and local capture actions.",
+      "html": "<button class=\"ds-button\">Older</button>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Submit a meeting message.",
+      "html": "<button class=\"ds-button ds-primary\">Send message</button>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Danger button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Confirm an explicit durable leave.",
+      "html": "<button class=\"ds-button ds-danger\">Confirm leave</button>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Leave button",
+      "kind": "button",
+      "description": "Open the inline leave confirmation.",
+      "html": "<button class=\"ds-button ds-leave\">Leave meeting</button>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Message field",
+      "kind": "input",
+      "refersTo": "textarea",
+      "description": "Visible label and vertically resizable message draft.",
+      "html": "<label class=\"ds-label\" for=\"ds-message\">Message the meeting</label><textarea class=\"ds-textarea\" id=\"ds-message\" rows=\"3\" placeholder=\"Write a message…\"></textarea>",
+      "css": ".ds-label{display:block;font:600 .875rem/1.5 system-ui,sans-serif;margin-bottom:.5rem;color:var(--ink, #222e2b)}.ds-textarea{font:16px/1.5 system-ui,sans-serif;display:block;width:100%;resize:vertical;min-height:6rem;max-height:24rem;border:1px solid #87978d;border-radius:6px;background:var(--surface, #fff);color:var(--ink, #222e2b);padding:.75rem;caret-color:var(--accent, #205c48)}.ds-textarea::placeholder{color:var(--muted, #53635d);opacity:1}.ds-textarea:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}"
+    },
+    {
+      "name": "History navigation",
+      "kind": "nav",
+      "description": "Explicit retained-history paging and follow-latest status.",
+      "html": "<nav class=\"ds-history-tools\" aria-label=\"History pages\"><button class=\"ds-button\">Older</button><button class=\"ds-button\" disabled>Newer</button><button class=\"ds-button\" disabled>Latest</button><span class=\"ds-page-status\" role=\"status\">Events 17–32 · following latest</span></nav>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-history-tools{font:16px/1.5 system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:0 1.5rem 1rem;border-bottom:1px solid var(--line, #d8dfd8)}.ds-page-status{color:var(--muted, #53635d);font-size:.8rem;margin-left:auto;font-variant-numeric:tabular-nums}@media(max-width:540px){.ds-history-tools{padding-inline:1rem}.ds-page-status{width:100%;margin:0}}"
+    },
+    {
+      "name": "Participant tag",
+      "kind": "chip",
+      "description": "Plain text marker for the current participant; no pill decoration.",
+      "html": "<span class=\"ds-tag\">You</span>",
+      "css": ".ds-tag{font:.8rem/1.5 system-ui,sans-serif;color:var(--muted, #53635d);flex-shrink:0}"
+    },
+    {
+      "name": "Conversation surface",
+      "kind": "card",
+      "refersTo": "conversation",
+      "description": "Principal bounded white surface with a modest section heading.",
+      "html": "<section class=\"ds-conversation\"><div class=\"ds-section-heading\"><h2 class=\"ds-title\">Conversation</h2><span class=\"ds-muted\">All meeting events</span></div></section>",
+      "css": ".ds-conversation{font:16px/1.5 system-ui,sans-serif;color:var(--ink, #222e2b);background:var(--surface, #fff);border:1px solid var(--line, #d8dfd8);border-radius:10px;min-width:0}.ds-section-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:.25rem 1rem;padding:1.25rem 1.5rem .75rem}.ds-title{margin:0;font-size:1.05rem;font-weight:650}.ds-muted{color:var(--muted, #53635d);font-size:.875rem}@media(max-width:540px){.ds-section-heading{padding-inline:1rem}}"
+    },
+    {
+      "name": "Review notice",
+      "kind": "custom",
+      "refersTo": "notice",
+      "description": "Inline interrupted-submission notice with deliberate review action.",
+      "html": "<section class=\"ds-notice\" aria-labelledby=\"ds-notice-title\"><h2 class=\"ds-notice-title\" id=\"ds-notice-title\">Submission outcome needs review</h2><p class=\"ds-notice-copy\">The reply was interrupted. Your operation may already be saved with its original ID. Review the commands below, including their contents and pending outcomes, before submitting again.</p><button class=\"ds-button\">I reviewed the commands</button></section>",
+      "css": ".ds-button{font:16px/1.5 system-ui,sans-serif;border:1px solid #87978d;background:var(--surface, #fff);color:var(--ink, #222e2b);border-radius:6px;padding:.5rem .8rem;min-height:44px;cursor:pointer;transition:background-color 150ms ease-out;}.ds-button:hover:enabled{background:var(--hover, #e4ece6)}.ds-button:active:enabled{background:#d3e2d7}.ds-button:disabled{cursor:default;opacity:.5}.ds-button.ds-primary{background:var(--accent, #205c48);border-color:var(--accent, #205c48);color:white;font-weight:600}.ds-button.ds-primary:hover:enabled{background:#174936}.ds-button.ds-danger{background:var(--danger, #9f302e);border-color:var(--danger, #9f302e);color:white}.ds-button.ds-danger:hover:enabled{background:#7d2524}.ds-button.ds-leave{color:var(--danger, #9f302e);border-color:#c5928f}.ds-button:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-notice{font:16px/1.5 system-ui,sans-serif;background:#fff3da;color:#59401d;border:1px solid #ceb27f;border-radius:6px;padding:1rem 1.25rem;margin-bottom:1rem;overflow-wrap:anywhere}.ds-notice-title{margin:0;font-size:1.05rem;font-weight:650}.ds-notice-copy{max-width:75ch;margin:.5rem 0 .75rem}.ds-notice .ds-button{margin:.25rem .75rem .25rem 0}"
+    },
+    {
+      "name": "Pending command",
+      "kind": "custom",
+      "description": "Native disclosure row with operation, original ID and inspectable contents.",
+      "html": "<div class=\"ds-command\"><details><summary class=\"ds-command-summary\"><span>Send message</span><span class=\"ds-command-state\">Pending</span><code class=\"ds-command-id\">example-command-id</code></summary><pre class=\"ds-command-content\">{ \"operation\": { \"type\": \"chat\", \"content\": \"Hello\" } }</pre></details></div>",
+      "css": ".ds-command{font:16px/1.5 system-ui,sans-serif;color:var(--ink, #222e2b);border-top:1px solid var(--line, #d8dfd8);padding-block:.65rem}.ds-command-summary{cursor:pointer;overflow-wrap:anywhere}.ds-command-summary:focus-visible{outline:3px solid var(--accent, #205c48);outline-offset:3px}.ds-command-state{font-size:.8rem;font-weight:650;color:var(--warning, #76501c);margin-left:.75rem}.ds-command-id{display:block;color:var(--muted, #53635d);font-size:.8rem;margin:.25rem 0 0 1rem;overflow-wrap:anywhere}.ds-command-content{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem;max-width:90ch}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Participant Workspace",
+    "overview": "The implemented interface is a quiet workspace for operating a shared meeting participant. Warm neutral surroundings, one white conversation surface, and restrained green actions keep messages and current state easy to scan. System typography and native controls make the interface familiar and practical.\n\nThis document records the implementation in `client/participant.css`, `client/participant.html`, and `client/browser-bootstrap.js`, following `docs/superpowers/plans/2026-11-25-participant-ui.md`. It describes the current participant surface, without establishing a visual identity for future surfaces. The browser attaches to the same durable participant session as the CLI; the interface makes local attachment, meeting connection, and retained snapshot freshness separately readable.",
+    "keyCharacteristics": [
+      "Warm neutral canvas with a flat white conversation surface.",
+      "Restrained green actions, explicit text states, and visible keyboard focus.",
+      "Conversation first, with participants and ownership controls alongside it.",
+      "Retained history and command outcomes remain inspectable during uncertainty."
+    ],
+    "rules": [
+      {
+        "name": "The Readable State Rule",
+        "body": "Pair every state color with explicit status text. Color alone must not carry connection, pending, rejection, or ownership meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Workspace Rule",
+        "body": "Use tonal surfaces, borders, and spacing to match the implemented depth; preserve the conversation as the principal bounded surface.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ownership Rule",
+        "body": "Keep the logical share grant, local capture lease, and actual media capability distinct. Neither requesting a turn nor claiming local ownership implies camera, microphone, screen capture, or media transport.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** preserve the warm canvas, white conversation, and restrained green primary action.",
+      "**Do** keep local attachment, meeting connection, snapshot freshness, and command outcomes separately legible.",
+      "**Do** preserve visible labels, keyboard focus, long-content wrapping, and explicit empty states.",
+      "**Do** retain original command IDs and expose uncertain outcomes for deliberate review."
+    ],
+    "donts": [
+      "**Don't** imply that logical share turns or local capture ownership start actual media.",
+      "**Don't** treat closing a browser tab as leaving the shared participant session.",
+      "**Don't** use color without the corresponding readable state label.",
+      "**Don't** replace retained history or command outcomes with invented meeting activity."
+    ]
+  }
+}

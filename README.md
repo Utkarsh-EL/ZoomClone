@@ -1,6 +1,6 @@
 # ZoomClone
 
-A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and secured loopback browser attachment share one participant session; the browser currently serves a diagnostic page. Full meeting UI and media remain unfinished.
+A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and the secured loopback participant UI share one session, with roster, paged history, pending outcomes, share queue and local capture-owner controls. Actual capture/media, subscriptions and broader deployment remain unfinished.
 
 Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md) for implemented behavior, evidence, limitations, and the exact next action. The [current design](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) describes the intended product.
 
@@ -34,7 +34,7 @@ See [participant sessions](docs/client-sessions.md) for runtime/agent configurat
 | --- | --- |
 | `npm test` | Current TypeScript backend, wire, discovery, engine and runtime adapter tests. |
 | `npm run typecheck` | TypeScript checks for current source, scripts and tests. |
-| `npm run test:browser` | Native headless Chromium reload, shared CLI identity/pending work/inbox and capture lease checks. |
+| `npm run test:browser` | Native Chromium UI controls, history/reload, shared CLI identity/pending work, uncertainty, share/leave and capture leases. |
 | `npm run test:coordinator` | Raft dependency safety regressions, helper suite, vet, build and process scenario. |
 | `npm run test:consensus` | Additional dependency/helper race and process checks. |
 | `npm run test:storage` | Real PostgreSQL fencing, transactions, inspection and restart tests. |

@@ -205,9 +205,10 @@ test("native browser reload and CLI retain one identity, pending IDs, inbox and 
       await until("uncertain UI submission", async () => await evaluate(active, "!document.querySelector('#uncertainty').hidden && document.querySelector('#chat-input').disabled") ? true : undefined, 2000);
       const uncertainId = interactiveJournal.view().commands.find(c => c.operation.type === "chat" && c.operation.content === "lost UI reply")!.id;
       const beforeReload = interactiveJournal.view().commands.map(c => c.id);
+      const interactiveRevision = await evaluate(active, "attachment.attachment.revision");
       await cdp("Page.reload", {}, active);
       await until("uncertainty survives native reload", async () => {
-        try { return await evaluate(active, `!document.querySelector('#uncertainty').hidden && document.querySelector('#commands').textContent.includes('${uncertainId}')`) ? true : undefined; } catch { return undefined; }
+        try { return await evaluate(active, `globalThis.attachment?.attachment?.revision > ${interactiveRevision} && !document.querySelector('#uncertainty').hidden && document.querySelector('#commands').textContent.includes('${uncertainId}')`) ? true : undefined; } catch { return undefined; }
       }, 3000);
       assert.deepEqual(interactiveJournal.view().commands.map(c => c.id), beforeReload);
       await evaluate(active, "document.querySelector('#reviewed').click()");
