@@ -127,6 +127,7 @@ test("terminal registration conflict releases the runtime listener and database 
     runtime = await startMeetingRuntime({ clusterId, runtimeId, expectedRevision: 0,
       address: "127.0.0.1:0", callers: [randomUUID()], token: randomBytes(32).toString("hex"), helperToken: lab.token,
       helpers: lab.nodes.map(n => ({ helperId: n.id, address: n.address })), connectionString, runtimeConnectionString: connectionString,
+      participants: { address: "127.0.0.1:0", token: randomBytes(32).toString("hex") },
     }, () => {});
     await assert.rejects(runtime.done, /REGISTRATION_REVISION_CONFLICT/);
     const address = runtime.address;
@@ -134,5 +135,7 @@ test("terminal registration conflict releases the runtime listener and database 
       try { await fetch(`http://${address}/v1/runtime`, { signal: AbortSignal.timeout(200) }); return undefined; }
       catch { return true; }
     }, 1000);
+    assert.ok(runtime.participantAddress);
+    await assert.rejects(fetch(`http://${runtime.participantAddress}/v1/participant`, { signal: AbortSignal.timeout(200) }));
   } finally { await runtime?.close(); await lab.stop(); }
 });

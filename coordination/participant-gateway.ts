@@ -46,6 +46,8 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
   });
   sockets.on("connection", socket => {
     socket.on("error", () => {});
+    const idle = setTimeout(() => socket.terminate(), deadline);
+    socket.once("close", () => clearTimeout(idle));
     let busy = false;
     function send(packet: unknown): void {
       const text = JSON.stringify(packet);
@@ -53,6 +55,7 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
       if (socket.readyState === WebSocket.OPEN) socket.send(text, error => { if (error) socket.terminate(); });
     }
     socket.on("message", (data, binary) => {
+      idle.refresh();
       let packet;
       try { if (binary) throw new Error("BINARY"); packet = wire.accept(JSON.parse(data.toString())); }
       catch { socket.terminate(); return; }
@@ -81,8 +84,15 @@ export async function serveParticipants(agent: Endpoint, store: Pick<MeetingStor
           const authority = agent.authority(owner.meetingId);
           if (!authority || !authority.ready()) throw new StoreError("NOT_READY");
           if (!sameOwner(authority.owner, owner)) throw new StoreError("FENCED");
-          result = body.operation === "execute" ? await store.execute(authority, body.command as unknown as MeetingCommand)
-            : await store.read(authority, body.credential as unknown as ParticipantCredential, body.after as number, body.limit as number);
+          if (body.operation === "execute") result = await store.execute(authority, body.command as unknown as MeetingCommand);
+          else {
+            // Worst-case JSON escapes expand an 8192-byte chat sixfold. Sixteen
+            // events plus the bounded live roster/queue fit the 1 MiB envelope.
+            const page = await store.read(authority, body.credential as unknown as ParticipantCredential, body.after as number, Math.min(body.limit as number, 16));
+            result = { ...page, state: { ...page.state,
+              members: Object.fromEntries(Object.entries(page.state.members).filter(([, member]) => member.joined)),
+            } };
+          }
           result = { owner, result };
         } catch (cause) {
           const code = cause instanceof StoreError ? cause.code : "DEPENDENCY_UNAVAILABLE";

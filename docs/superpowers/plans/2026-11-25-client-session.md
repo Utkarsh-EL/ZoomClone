@@ -51,9 +51,9 @@ Interfaces: `serveParticipants(agent, store, options)` exposes `/v1/participant`
 
 Files: participant agent executable, `tests/participant-process.test.ts`, storage runner, checkpoint documentation/evidence and current handoff.
 
-- [ ] Add a production-path process test using real helpers, restricted PostgreSQL runtime pools, runtime processes and durable session process restart. Cover join/chat, uncertain replies, takeover/replay, old incarnation and quorum refusal.
-- [ ] Run `npm run test:runtimes`, `npm test`, `npm run typecheck` and diff checks; review the complete change and reproduce/fix important findings.
-- [ ] Document configuration, guarantees, observed evidence and material limits; update handoff and commit verified increments.
+- [x] Add a production-path process test using real helpers, restricted PostgreSQL runtime pools, runtime processes and durable session process restart. Cover join/chat, uncertain replies, takeover/replay, old incarnation and quorum refusal.
+- [x] Run `npm run test:runtimes`, `npm test`, `npm run typecheck` and diff checks; review the complete change and reproduce/fix important findings.
+- [x] Document configuration, guarantees, observed evidence and material limits; update handoff and commit verified increments.
 
 ## Execution ledger
 
@@ -68,3 +68,13 @@ Pre-flight: Task 2 consumes Task 1 transport signatures; Task 3 consumes Task 2 
 Task 1 complete: failure-first session tests 5/5, full suite 46/46, typecheck and diff whitespace passed. Local journal uses transactional DELETE journals and FULL synchronization. WebSocket dependencies installed with registry access after sandbox denial; no vulnerabilities reported.
 
 Task 2 complete: failure-first socket tests 4/4, full suite 50/50, typecheck and diff whitespace passed. Reply incarnation validation rejects stale destinations before interpreting their application errors. Runtime composition shares its existing wire and shuts down both ingress listeners.
+
+Task 3 complete: production scripts and process recovery verified. Final npm test 56/56; typecheck passed; npm run test:runtimes 16/16 in zoom-storage-b0299ce9. Participant scenario 6.95 s, after a separate targeted 7.19 s passing run. PostgreSQL schema, Go/Raft and runtime readiness rules are unchanged. See evidence/client_session_run/result.json and docs/client-sessions.md.
+
+Final review: two Important findings reproduced RED-to-GREEN: oversized escaped-history/lifetime-roster replies, and acceptance of malformed replay DTOs. Both fixed; no unresolved Critical/Important findings. Additional tests reproduce abort-during-resolution and upgraded idle deadline failures. Full process reruns exposed repeated NOT_READY timing collisions: retry jitter fixed progress without weakening readiness (earlier failing runs are not counted as passing evidence).
+
+Final: minor (deferred): runtime endpoint/incarnation routes remain provisioned and copied at agent startup; new incarnations require refreshed configuration and restart with the same journal. Automatic placement announcements are a later subsystem; the guide and handoff document this limit.
+
+Ruling: keep the full durable identity history in SQL and project the live roster in participant replies, with at most 16 events per page — bounds worst-case serialized replies while retaining replay and identity tombstones. The public snapshot omits departed members; their events remain replayable.
+
+Finishing: keep the authorized milestone-5 branch in place with verified local commits and a continuation handoff; no merge or push requested.

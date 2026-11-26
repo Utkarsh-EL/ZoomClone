@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "base": "ed460ba",
+  "increments": ["87881da: durable journal/session", "b04ff93: production WebSocket gateway", "subsequent commit: production agents, recovery and review fixes"],
+  "verification": {
+    "npm test": { "passed": 56, "failed": 0 },
+    "npm run typecheck": "passed",
+    "npm run test:runtimes": { "passed": 16, "failed": 0, "storage": 7, "storageFaults": 4, "recovery": 2, "runtimeProcesses": 2, "participantProcesses": 1 },
+    "finalOwnedDockerLab": "zoom-storage-b0299ce9",
+    "participantScenarioMs": 6946.8596,
+    "targetedParticipantScenarioAfterRetryFixMs": 7187.8105,
+    "runtimeTranscript": "runtime-verification.txt",
+    "consensusOnlySuite": "not rerun; no Go/Raft changes"
+  },
+  "coverage": [
+    "Credentials and initial join UUID/contents persist before transmission",
+    "Pending command mutation isolation, restart, ordered serialization and queue bounds",
+    "Atomic replay inbox and meeting/revision-0 cursor; malformed data cannot advance cursor",
+    "Authenticated stamped WebSocket commands/read requests bind exact runtime owner and incarnation",
+    "Real production scripts with three helpers, three runtimes, restricted PostgreSQL pools and two participant agents",
+    "Reply loss after committed join/chat, participant SIGKILL/restart and stable original SQL outcome",
+    "Two runtime crashes, survivor takeover and offline-history replay without duplicate inbox sequences",
+    "Late SQL owner rejection, old runtime incarnation refusal and participant listener shutdown on revocation",
+    "Quorum loss retains pending command; restoring quorum completes the same ID",
+    "Existing PostgreSQL restart, stalled transaction, discovery and helper leader loss regressions retained"
+  ],
+  "reproducedAndFixed": [
+    "Oversized escaped chat history and lifetime roster made replay reconnect forever: cap pages at 16 events and project live roster; SQL tombstones retained",
+    "Malformed replay snapshot/event structures could advance durable cursor: validate full current DTO before transaction writes",
+    "Cancellation during route lookup could send afterward: recheck abort before transmission",
+    "WebSocket upgrade cleared HTTP socket timeout: explicit upgraded idle deadline",
+    "Fixed retry and readiness-renewal cadences repeatedly collided with NOT_READY: randomized error retry delay; readiness rules unchanged"
+  ],
+  "limits": [
+    "Unfiltered subscription revision zero only; topics require committed-order replay eligibility",
+    "Headless CLI/shared session API; secured browser attachment, GUI and media remain unfinished",
+    "Literal loopback trusted backend agents with provisioned tokens; no public/browser deployment claim",
+    "Runtime participant routes pin incarnations; refreshed configuration and same-journal agent restart required for new routes",
+    "Plaintext local credentials under filesystem permissions; process-crash evidence, not host/disk-failure proof",
+    "Local inbox/outcomes retained for meeting lifetime without garbage collection",
+    "Socket deadlines do not cancel committed work; blackholed database connections may retain admission and delay shutdown",
+    "Supervisor, SFU and complete proxy/network deployment remain unfinished"
+  ]
+}

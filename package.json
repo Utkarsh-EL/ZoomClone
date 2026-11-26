@@ -11,6 +11,7 @@
     "test:storage": "node scripts/storage-check.ts",
     "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts tests/participant-gateway.test.ts",
     "start:discovery": "node scripts/discovery-peer.ts",
+    "start:participant": "node scripts/participant-agent.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
     "test:coordinator": "node scripts/coordinator-build.ts --check",
     "test:consensus": "node scripts/coordinator-build.ts --consensus",

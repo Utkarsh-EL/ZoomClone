@@ -6,6 +6,7 @@ import { UUID_PATTERN } from "../coordination/wire.ts";
 import { validateOperation, type Operation } from "../storage/engine.ts";
 import type { MeetingCommand, MeetingEvent, Outcome, ParticipantCredential, Replay } from "../storage/types.ts";
 import type { ReplayCursor, SessionTarget } from "./types.ts";
+import { validReplay } from "./replay-validation.ts";
 
 interface Identity extends SessionTarget, ParticipantCredential { version: 1 }
 const integer = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) < Number.MAX_SAFE_INTEGER - 4;
@@ -23,6 +24,7 @@ export class SessionJournal {
   private constructor(db: DatabaseSync, identity: Identity) { this.db = db; this.identity = identity; }
 
   static open(path: string, target: SessionTarget): SessionJournal {
+    if (typeof path !== "string" || !path || path === ":memory:" || path.startsWith("file:")) throw new Error("DURABLE_SESSION_PATH");
     if (![target.clusterId, target.meetingId].every(id => typeof id === "string" && UUID_PATTERN.test(id))) throw new Error("SESSION_TARGET");
     validateOperation({ type: "join", name: target.name });
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -110,7 +112,7 @@ export class SessionJournal {
     // committed-order eligibility protocol, never a silently reused cursor.
     this.transaction(() => {
       const seq = this.number("cursor");
-      if (after.meetingId !== this.identity.meetingId || after.subscriptionRevision !== 0 || after.seq !== seq
+      if (!validReplay(page) || after.meetingId !== this.identity.meetingId || after.subscriptionRevision !== 0 || after.seq !== seq
         || page.meetingId !== after.meetingId || !integer(page.watermark) || !integer(page.scannedWatermark)
         || page.scannedWatermark < seq || page.scannedWatermark > page.watermark || page.phase !== "ACTIVE"
         || !Array.isArray(page.events) || page.events.length > 200 || page.events.length !== page.scannedWatermark - seq

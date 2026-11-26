@@ -83,7 +83,9 @@ export function participantResolver(options: Identity & { meetingId: string; hel
   const wire = sharedWire ?? new ControlWire(identity), routes = structuredClone(options.routes);
   if (!routes.length || routes.length > 128) throw new Error("INVALID_PARTICIPANT_ROUTES");
   return async () => {
-    const state = await options.helper.call<MetadataState>("read");
+    let state: MetadataState;
+    try { state = await options.helper.call<MetadataState>("read"); }
+    catch { throw new Error("AUTHORITY_UNAVAILABLE"); }
     const meeting = state.meetings[options.meetingId], assignment = meeting?.assignment;
     if (state.cluster !== identity.clusterId || !assignment || assignment.phase !== "READY") throw new Error("AUTHORITY_UNAVAILABLE");
     const route = routes.find(r => r.runtimeId === assignment.runtimeId && r.incarnation === assignment.incarnation);

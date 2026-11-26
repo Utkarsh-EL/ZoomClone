@@ -21,7 +21,7 @@ function fixture() {
     async execute(_authority: unknown, input: MeetingCommand) { calls++; if (input.secret !== command.secret) throw new StoreError("AUTH_REQUIRED"); return { code: "OK", seq: 1, generation: 1, grantVersion: 0 }; },
     async read() { calls++; return { meetingId: owner.meetingId, code: "socket", generation: 1, runtimeId: owner.runtimeId, incarnation: owner.incarnation,
       attemptId: owner.attemptId, phase: "ACTIVE" as const, watermark: 1, state: emptyState(), observedAt: new Date().toISOString(),
-      events: [{ seq: 1, generation: 1, lamport: 1, kind: "joined", payload: { participantId: identity.nodeId } }], scannedWatermark: 1 }; },
+      events: [{ seq: 1, generation: 1, lamport: 1, kind: "joined", payload: { participantId: identity.nodeId, name: "Alice" } }], scannedWatermark: 1 }; },
   };
   return { owner, identity, command, token, agent, store, calls: () => calls, unready: () => { ready = false; } };
 }
@@ -93,4 +93,53 @@ test("helper routing requires READY metadata and a provisioned matching runtime 
     meeting.assignment.phase = "READY"; meeting.assignment.incarnation = randomUUID();
     await assert.rejects(resolve(), /AUTHORITY_UNAVAILABLE/);
   } finally { await service.close(); }
+});
+
+test("idle upgraded sockets are closed at their deadline", async () => {
+  const f = fixture(), service = await serveParticipants(f.agent, f.store, { address: "127.0.0.1:0", token: f.token, timeoutMs: 40 });
+  const socket = new WebSocket(`ws://${service.address}/v1/participant`, "zoom.participant.v1", { headers: { Authorization: `Bearer ${f.token}` } });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await once(socket, "open");
+    const closed = once(socket, "close").then(() => true);
+    assert.equal(await Promise.race([closed, new Promise<boolean>(r => { timer = setTimeout(() => r(false), 300); })]), true);
+  } finally { clearTimeout(timer); socket.terminate(); await service.close(); }
+});
+
+test("maximum-size escaped chat history replays in pages below the wire byte bound", async () => {
+  const f = fixture();
+  const store = { ...f.store, async read(_authority: unknown, _credential: unknown, after = 0, limit = 100) {
+    const base = await f.store.read();
+    const end = Math.min(100, after + limit);
+    return { ...base, watermark: 100, scannedWatermark: end, events: Array.from({ length: end - after }, (_, i) => ({
+      seq: after + i + 1, generation: 1, lamport: 1, kind: "chat", payload: { participantId: f.identity.nodeId, content: "\u0001".repeat(8192) },
+    })) };
+  } };
+  const service = await serveParticipants(f.agent, store, { address: "127.0.0.1:0", token: f.token });
+  const connection = await ParticipantConnection.connect({ ...f, address: service.address });
+  try {
+    let after = 0;
+    const received: number[] = [];
+    while (after < 100) {
+      const page = await connection.read(f.command, after, 100);
+      assert.ok(Buffer.byteLength(JSON.stringify(page)) < 1024 * 1024);
+      received.push(...page.events.map(e => e.seq)); after = page.scannedWatermark;
+    }
+    assert.deepEqual(received, Array.from({ length: 100 }, (_, i) => i + 1));
+  } finally { connection.close(); await service.close(); }
+});
+
+test("participant snapshot bounds roster size while SQL retains departed identities", async () => {
+  const f = fixture();
+  const state = emptyState();
+  for (let i = 0; i < 6000; i++) state.members[randomUUID()] = { name: "x".repeat(200), joined: false };
+  state.members[f.identity.nodeId] = { name: "Alice", joined: true };
+  const store = { ...f.store, async read() { return { ...await f.store.read(), state }; } };
+  const service = await serveParticipants(f.agent, store, { address: "127.0.0.1:0", token: f.token });
+  const connection = await ParticipantConnection.connect({ ...f, address: service.address });
+  try {
+    const replay = await connection.read(f.command, 0, 100);
+    assert.deepEqual(Object.keys(replay.state.members), [f.identity.nodeId]);
+    assert.equal(Object.keys(state.members).length, 6001);
+  } finally { connection.close(); await service.close(); }
 });

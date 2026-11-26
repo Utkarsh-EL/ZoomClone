@@ -20,7 +20,7 @@ async function fixture() {
 function page(meetingId: string, seqs: number[], watermark = seqs.at(-1) ?? 0): Replay {
   return { meetingId, code: "session", generation: 1, runtimeId: randomUUID(), incarnation: randomUUID(),
     attemptId: randomUUID(), phase: "ACTIVE", watermark, observedAt: new Date().toISOString(), state: emptyState(),
-    events: seqs.map(seq => ({ seq, generation: 1, lamport: seq + 10, kind: "chat", payload: { content: `chat ${seq}` } })),
+    events: seqs.map(seq => ({ seq, generation: 1, lamport: seq + 10, kind: "chat", payload: { participantId: randomUUID(), content: `chat ${seq}` } })),
     scannedWatermark: seqs.at(-1) ?? watermark };
 }
 
@@ -43,6 +43,12 @@ test("credentials and initial join are committed before use and immutable throug
     assert.throws(() => SessionJournal.open(f.path, { ...f.target, meetingId: randomUUID() }), /SESSION_TARGET/);
     assert.equal(JSON.stringify(journal.view()).includes(original.secret), false);
   } finally { journal.close(); await f.clean(); }
+});
+
+test("a durable session refuses SQLite memory databases", async () => {
+  const f = await fixture();
+  try { assert.throws(() => SessionJournal.open(":memory:", f.target), /DURABLE_SESSION_PATH/); }
+  finally { await f.clean(); }
 });
 
 test("lost replies survive agent restart and replay the exact command before later commands", async () => {
@@ -133,5 +139,43 @@ test("leave forms a durable queue boundary and abort preserves an uncertain comm
     const running = session.run(abort.signal);
     await arrived; abort.abort(); await running;
     assert.equal(journal.pending().length, 2);
+  } finally { journal.close(); await f.clean(); }
+});
+
+test("abort during route lookup cannot send a command after cancellation", async () => {
+  const f = await fixture(), journal = f.open(), abort = new AbortController();
+  let release!: () => void, entered!: () => void, sent = 0;
+  const blocked = new Promise<void>(r => { release = r; }), arrived = new Promise<void>(r => { entered = r; });
+  const session = new ClientSession(journal, async () => {
+    entered(); await blocked;
+    return { async execute() { sent++; return outcome; }, async read() { return page(f.target.meetingId, []); }, close() {} };
+  });
+  try {
+    const running = session.run(abort.signal); await arrived; abort.abort(); release(); await running;
+    assert.equal(sent, 0);
+    assert.equal(journal.pending().length, 1);
+  } finally { release(); journal.close(); await f.clean(); }
+});
+
+test("malformed replay state, observations and events cannot commit an inbox entry or cursor", async () => {
+  const f = await fixture(), journal = f.open();
+  try {
+    const malformed = [
+      (p: any) => { p.state.members = "invalid"; },
+      (p: any) => { delete p.state.queue; },
+      (p: any) => { p.state.holder = { participantId: "bad", requestId: randomUUID() }; },
+      (p: any) => { p.state.members[randomUUID()] = { name: 123, joined: true }; },
+      (p: any) => { p.observedAt = "invalid"; },
+      (p: any) => { delete p.generation; },
+      (p: any) => { p.events[1].kind = ""; },
+      (p: any) => { p.events[1].payload = []; },
+      (p: any) => { p.events[1].payload.content = 123; },
+    ];
+    for (const mutate of malformed) {
+      const replay = page(f.target.meetingId, [1, 2]); mutate(replay);
+      assert.throws(() => journal.recordReplay(journal.cursor(), replay), /INVALID_CURSOR/);
+      assert.equal(journal.cursor().seq, 0);
+      assert.equal(journal.view().events.length, 0);
+    }
   } finally { journal.close(); await f.clean(); }
 });
