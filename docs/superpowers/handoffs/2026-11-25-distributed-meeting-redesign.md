@@ -5,6 +5,8 @@ Status: coordinator, consensus repair, PostgreSQL storage foundations, headless 
 
 ## Effort selection for the next session
 
+Latest conversational direction supersedes the subscription continuation below: the user prefers invite-only group chats, considers additional public channels reasonable, and agrees to one supported protocol with coordinated refactors/regression tests rather than parallel compatibility. Keep the recovery journal and existing safety guarantees. The subscription design is reopened and its plan is on hold; no implementation started. Next action is to clarify group-history visibility conversationally and revise/simplify the design/plan, not execute old task 1. Private membership must protect live and historical access, including revision-zero reads. The user does not read plans/specs: explain user-visible choices in conversation and never infer agreement from documents. Medium effort is sufficient to start this bounded clarification/revision; escalate only for a specific unresolved correctness question.
+
 Choose effort for the next bounded task, rather than inheriting a recommendation from an earlier checkpoint. These are engineering judgments; no medium/high/extra-high comparison has been run for this repository. Historical recommendations below are context, not a standing high-effort requirement.
 
 | Next task | Suggested effort | Reason |

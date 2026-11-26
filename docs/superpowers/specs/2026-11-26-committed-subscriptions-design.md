@@ -3,7 +3,9 @@
 Date: 2026-11-26
 Baseline: `f6ffdd6`
 Review baseline: `640ae13` (the proposal below was originally grounded in `f6ffdd6`).
-Status: accepted with the engineering revisions recorded below, under the user's delegated approve-or-revise review. This records the reviewer's decisions, not separate user sign-off on every choice. The [bounded implementation plan](../plans/2026-11-26-committed-subscriptions.md) is written; no filtering, migration or product code is implemented.
+Status: REOPENED after conversational product clarification. The user prefers invite-only group chats, with additional public channels reasonable, and agrees to one supported protocol rather than parallel-version compatibility. The design below describes public delivery filters, explicitly without access control, and is no longer an approved implementation basis. Revise it before executing the linked plan. No filtering, migration or group-chat code is implemented.
+
+Current direction: retain the recovery journal and shared-session/safety guarantees; simplify protocol updates and avoid temporary compatibility adapters. Private chat membership must govern both live delivery and historical reads before any subscription filter; revision zero cannot bypass that authorization. Group history visibility on invitation/removal remains a product question. Explain consequential choices in conversation; documents are working records, not evidence of user agreement.
 
 ## Intent and boundary
 

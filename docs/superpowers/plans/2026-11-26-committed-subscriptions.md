@@ -1,5 +1,7 @@
 # Committed subscriptions implementation plan
 
+**ON HOLD — revise before execution.** Subsequent conversation establishes invite-only group chats as the preferred feature, allows additional public channels, and accepts simplifying to one supported protocol while retaining the journal and safety guarantees. This plan implements public delivery filters with parallel v1/v2 compatibility; it does not implement private membership permissions. Its task sequence and continuation instructions below are historical. Do not start task 1 from the old continuation. First resolve group-history visibility in conversation, then replace the design/plan with the smaller agreed scope. No implementation task has begun.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task, inline. Steps use checkbox syntax for tracking. Stop at each task's review gate; do not combine the six increments into one unreviewed change.
 
 **Goal:** Deliver prospective committed chat subscriptions with deterministic bounded replay through one durable participant session, preserving existing media and failure guarantees.
