@@ -10,7 +10,7 @@ The bounded release-review correction scopes the banner to the stopped display's
 
 Build a Zoom-like meeting demo that teaches the five milestones in [the assignment requirements](../../assignment-reqs.txt). Learning distributed systems is the primary goal; learning how to collaborate with a coding agent is secondary. Prefer a coherent, demonstrable system over implementing an additional storage protocol.
 
-This document is the current design proposal. It supersedes its earlier SQLite, primary/backup application replication, and per-message Raft certificate design. The historical video MVP specification describes a different architecture.
+This document is the current design proposal. It supersedes its earlier SQLite, primary/backup application replication, and per-message Raft certificate design.
 
 ### Confirmed direction
 
@@ -65,7 +65,6 @@ The original root application, 16-bit overlay, TCP participant protocol, ring el
 - `coordination/` owns discovery, helper routing, ownership recovery and runtime lifecycle. `services/coordinator/` and the repaired Raft dependency own durable coordinator metadata.
 - `storage/` owns durable meeting commands, identities/verifiers, outcomes, events, snapshot reads and SQL fencing. `client/` owns the durable participant journal/session, runtime WebSocket transport and secured loopback browser adapter; the runtime participant gateway delegates every command/read to existing readiness and SQL fences. Browser attachment/capture revisions are local; committed subscription revisions remain unfinished.
 - SFU media must replace the retired still-frame demonstration. Historical design/evidence records do not establish current media or participant guarantees.
-- `docs/superpowers/specs/2026-09-10-video-meeting-mvp-design.md` is historical context, not another current specification.
 
 Inspect the current modules before implementation. Preserve the new safety boundaries while completing the remaining product.
 
