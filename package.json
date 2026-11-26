@@ -9,7 +9,7 @@
     "test:runtimes": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes",
     "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",
-    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts",
+    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts",
     "start:discovery": "node scripts/discovery-peer.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
     "test:coordinator": "node scripts/coordinator-build.ts --check",
@@ -20,9 +20,11 @@
   "devDependencies": {
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "ws": "8.22.2"
   }
 }
