@@ -1,55 +1,83 @@
 import { Device } from 'mediasoup-client';
 import { CaptureController } from './media-capture.js';
 
-/** Opt-in feasibility API, loaded only by the media harness. No identity, join,
- * grant or uncertain command is invented here. Capture is always explicit. */
-export class MediaLab {
+/** Transient media only. All effects use the existing production attachment. */
+export class MediaLab extends EventTarget {
   state = 'idle';
   epoch = null;
   consumers = new Map();
   producers = new Map();
-  constructor(attachment) {
+  playback = 'muted';
+  #revision = 0;
+  #openTail = Promise.resolve();
+  constructor(attachment, { Device: DeviceClass = Device, release, container } = {}) {
+    super(); this.Device = DeviceClass; this.container = container;
     this.attachment = attachment;
-    this.capture = new CaptureController(attachment, (source, track, grant) => this.publish(source, track, grant), id => this.closeProducer(id));
+    this.capture = new CaptureController(attachment, (source, track, grant) => this.publish(source, track, grant), id => this.closeProducer(id), release);
     attachment.addEventListener('close', () => this.closeTransports());
   }
-  async call(request, opening = false) {
+  changed() { this.dispatchEvent(new Event('change')); }
+  setState(state) { this.state = state; this.changed(); }
+  current(revision) { return revision === this.#revision && this.attachment.readyState !== 'closed'; }
+  check(revision) { if (!this.current(revision)) throw new Error('MEDIA_CANCELED'); }
+  async call(request, opening = false, revision = this.#revision, epoch = this.epoch) {
     const retryUntil = performance.now() + 4000;
     for (let attempt = 0; ; attempt++) {
       try {
-        const reply = await this.attachment.media({ ...request, ...(!opening ? { epoch: this.epoch } : {}) });
-        if (!opening && this.epoch && reply.epoch !== this.epoch) throw new Error('SFU_RESTARTED');
+        this.check(revision);
+        const reply = await this.attachment.media({ ...request, ...(!opening ? { epoch } : {}) });
+        this.check(revision);
+        if (!opening && epoch && reply.epoch !== epoch) throw new Error('SFU_RESTARTED');
         if (opening) this.epoch = reply.epoch;
         return reply.value;
       } catch (error) {
         // The adapter reports NOT_READY only before any SFU effect. Renewal
         // deliberately drops readiness briefly; don't phase-lock onto it.
+        this.check(revision);
         if (['NOT_READY', 'MEDIA_ROUTE_UNAVAILABLE'].includes(error.message) && attempt < 63 && performance.now() < retryUntil) { await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 46))); continue; }
-        this.state = 'unavailable'; throw error;
+        this.setState('unavailable'); throw error;
       }
     }
   }
   closeTransports() {
+    this.#revision++; this.#disposeTransports(); this.setState('idle');
+  }
+  #disposeTransports() {
     this.send?.close(); this.recv?.close();
     for (const consumer of this.consumers.values()) { consumer.close(); consumer.element?.remove(); }
-    this.consumers.clear(); this.producers.clear();
+    this.consumers.clear(); this.producers.clear(); this.send = null; this.recv = null;
   }
-  async open() {
-    this.closeTransports(); this.state = 'connecting';
-    const options = await this.call({ action: 'open' }, true);
-    this.device = new Device(); await this.device.load({ routerRtpCapabilities: options.rtpCapabilities });
-    this.send = this.device.createSendTransport(options.send); this.recv = this.device.createRecvTransport(options.recv);
-    for (const [direction, transport] of [['send', this.send], ['recv', this.recv]]) {
-      transport.on('connect', ({ dtlsParameters }, done, fail) => { this.call({ action: 'connect', direction, dtlsParameters }).then(done, fail); });
-      transport.on('connectionstatechange', state => { if (['failed', 'closed', 'disconnected'].includes(state)) this.state = 'unavailable'; });
-    }
-    this.send.on('produce', ({ kind, rtpParameters, appData }, done, fail) => {
-      this.call({ action: 'produce', kind, rtpParameters, ...appData }).then(done, fail);
-    });
-    this.state = 'ready';
+  open() {
+    const revision = ++this.#revision;
+    this.#disposeTransports(); this.setState('connecting');
+    const work = this.#openTail.then(async () => {
+      this.check(revision);
+      const options = await this.call({ action: 'open' }, true, revision);
+      const device = new this.Device(); await device.load({ routerRtpCapabilities: options.rtpCapabilities }); this.check(revision);
+      const send = device.createSendTransport(options.send), recv = device.createRecvTransport(options.recv), epoch = this.epoch;
+      this.device = device; this.send = send; this.recv = recv;
+      for (const [direction, transport] of [['send', send], ['recv', recv]]) {
+        transport.on('connect', ({ dtlsParameters }, done, fail) => { this.call({ action: 'connect', direction, dtlsParameters }, false, revision, epoch).then(done, fail); });
+        transport.on('connectionstatechange', state => { if (this.current(revision) && ['failed', 'closed', 'disconnected'].includes(state)) this.setState('unavailable'); });
+      }
+      send.on('produce', ({ kind, rtpParameters, appData }, done, fail) => {
+        this.call({ action: 'produce', kind, rtpParameters, ...appData }, false, revision, epoch).then(done, fail);
+      });
+      this.setState('ready');
+    }).catch(error => { if (this.current(revision)) this.setState('unavailable'); throw error; });
+    this.#openTail = work.catch(() => {}); return work;
   }
   async publish(source, track, grant) {
-    const producer = await this.send.produce({ track, stopTracks: false, appData: { source, ...grant } });
+    const revision = this.#revision, send = this.send, epoch = this.epoch;
+    if (!send) throw new Error('MEDIA_NOT_READY');
+    const producer = await send.produce({ track, stopTracks: false, appData: { source, ...grant } });
+    if (!this.current(revision) || this.send !== send) {
+      producer.close();
+      // Never address a successor peer with an old callback. Opens are ordered
+      // after prior signaling; a same-epoch reopen closes that old peer itself.
+      if (this.current(revision)) await this.call({ action: 'closeProducer', producerId: producer.id }, false, revision, epoch).catch(() => {});
+      throw new Error('MEDIA_CANCELED');
+    }
     this.producers.set(producer.id, producer); return producer;
   }
   async closeProducer(id) {
@@ -63,19 +91,31 @@ export class MediaLab {
     return this.capture.start(source, acquire, grant);
   }
   async subscribe() {
-    const view = await this.attachment.view(), id = view.view.participantId;
-    const producers = await this.call({ action: 'list' });
+    const revision = this.#revision, recv = this.recv, device = this.device;
+    const view = await this.attachment.view(), id = view.view.participantId; this.check(revision);
+    const producers = await this.call({ action: 'list' }, false, revision);
     for (const producer of producers) {
       if (producer.participantId === id || this.consumers.has(producer.id)) continue;
-      const options = await this.call({ action: 'consume', producerId: producer.id, rtpCapabilities: this.device.recvRtpCapabilities ?? this.device.rtpCapabilities });
-      const consumer = await this.recv.consume(options); consumer.source = producer.source;
+      const options = await this.call({ action: 'consume', producerId: producer.id, rtpCapabilities: device.recvRtpCapabilities ?? device.rtpCapabilities }, false, revision);
+      const consumer = await recv.consume(options);
+      if (!this.current(revision)) { consumer.close(); throw new Error('MEDIA_CANCELED'); } consumer.source = producer.source;
       const element = document.createElement(consumer.kind === 'video' ? 'video' : 'audio');
-      element.autoplay = true; element.muted = true; element.srcObject = new MediaStream([consumer.track]); document.body.append(element);
+      element.autoplay = true; element.muted = this.playback !== 'playing'; element.playsInline = true; element.controls = consumer.kind === 'video'; element.setAttribute('aria-label', `Remote ${producer.source}`);
+      element.srcObject = new MediaStream([consumer.track]); (this.container ?? document.body).append(element);
       consumer.element = element; this.consumers.set(producer.id, consumer);
-      await this.call({ action: 'resume', consumerId: consumer.id }); await element.play();
+      await this.call({ action: 'resume', consumerId: consumer.id }, false, revision);
+      try { await element.play(); } catch { if (this.current(revision)) this.playback = 'blocked'; }
+      this.check(revision);
     }
     for (const [id, consumer] of this.consumers) if (!producers.some(p => p.id === id)) { consumer.close(); consumer.element.remove(); this.consumers.delete(id); }
-    return producers;
+    this.changed(); return producers;
+  }
+  async play() {
+    const revision = this.#revision; this.playback = 'playing';
+    await Promise.all([...this.consumers.values()].map(async consumer => {
+      consumer.element.muted = false;
+      try { await consumer.element.play(); } catch { if (this.current(revision)) this.playback = 'blocked'; }
+    })); this.changed();
   }
   async stats() {
     const values = [];
@@ -85,14 +125,16 @@ export class MediaLab {
     return values;
   }
   async reconnect() {
-    const retained = [...this.capture.tracks.entries()].map(([source, entry]) => ({ source, track: entry.track, grant: entry.grant }));
+    const retained = [...this.capture.tracks.entries()];
     await this.open();
-    for (const { source, track, grant } of retained) {
-      if (!this.attachment.ownsCapture || track.readyState !== 'live') continue;
-      const producer = await this.publish(source, track, grant);
-      const entry = this.capture.tracks.get(source);
-      if (entry?.track === track && this.attachment.ownsCapture) entry.producer = producer;
-      else { producer.close(); track.stop(); await this.closeProducer(producer.id).catch(() => {}); }
+    const revision = this.#revision;
+    for (const [source, entry] of retained) {
+      this.check(revision);
+      if (!this.capture.current(source, entry)) continue;
+      const producer = await this.publish(source, entry.track, entry.grant);
+      if (this.current(revision) && this.capture.current(source, entry)) entry.producer = producer;
+      else { producer.close(); entry.track.stop(); if (this.current(revision)) await this.closeProducer(producer.id).catch(() => {}); }
     }
+    this.changed();
   }
 }

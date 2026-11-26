@@ -80,3 +80,53 @@ test('a reconnect publication completing after Stop also closes its server produ
   finish({ id: 'late', close() {} }); await reconnect;
   assert.ok(closed.some(request => request.action === 'closeProducer' && request.producerId === 'late'));
 });
+
+const view = (holder = { participantId: 'me', requestId: 'grant' }, grantVersion = 7) => ({ participantId: 'me', observation: { state: { members: { me: { joined: true } }, holder, grantVersion } } });
+test('grant replacement cancels pending screen permission and stops only the old screen', async () => {
+  const f = fixture(), screen = f.track(), camera = f.track(); let finish;
+  f.capture.reconcile(view());
+  await f.capture.start('camera', async () => ({ getTracks: () => [camera] }));
+  const start = f.capture.start('screen', () => new Promise(resolve => { finish = resolve; }), { requestId: 'grant', grantVersion: 7 });
+  f.capture.reconcile(view({ participantId: 'me', requestId: 'next' }, 8));
+  finish({ getTracks: () => [screen] }); await assert.rejects(start, /CAPTURE_REVOKED/);
+  assert.equal(screen.readyState, 'ended'); assert.equal(camera.readyState, 'live'); assert.deepEqual(f.submitted, []);
+  f.capture.reconcile({ ...view(), left: true }); assert.equal(camera.readyState, 'ended');
+});
+test('lease revision change cancels pending permission even when the same tab owns capture again', async () => {
+  const f = fixture(), track = f.track(); let finish;
+  f.attachment.captureState = { revision: 1 };
+  const start = f.capture.start('mic', () => new Promise(resolve => { finish = resolve; }));
+  f.attachment.captureState = { revision: 3 }; f.attachment.dispatchEvent(new Event('capturechange'));
+  finish({ getTracks: () => [track] }); await assert.rejects(start, /CAPTURE_REVOKED/);
+  assert.equal(track.readyState, 'ended');
+});
+test('membership loss cancels all capture without releasing a shared grant', async () => {
+  const f = fixture(), track = f.track(); f.capture.reconcile(view());
+  await f.capture.start('screen', async () => ({ getTracks: () => [track] }), { requestId: 'grant', grantVersion: 7 });
+  const departed = view(); departed.observation.state.members.me.joined = false;
+  f.capture.reconcile(departed); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(track.readyState, 'ended'); assert.deepEqual(f.submitted, []);
+});
+test('overlapping opens serialize server effects and late replies cannot install transports', async () => {
+  const attachment = new EventTarget(); attachment.readyState = 'attached';
+  let finish, calls = 0; const transports = [];
+  attachment.media = async () => { calls++; if (calls === 1) await new Promise(resolve => { finish = resolve; }); return { epoch: `epoch-${calls}`, value: { rtpCapabilities: {}, send: {}, recv: {} } }; };
+  class FakeDevice {
+    async load() {};
+    createSendTransport() { const t = { on() {}, close() { this.closed = true; } }; transports.push(t); return t; }
+    createRecvTransport() { return this.createSendTransport(); }
+  }
+  const media = new MediaLab(attachment, { Device: FakeDevice });
+  const first = media.open(); const rejected = assert.rejects(first, /MEDIA_CANCELED/);
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  const second = media.open(); assert.equal(calls, 1); finish(); await rejected; await second;
+  assert.equal(media.epoch, 'epoch-2'); assert.equal(transports.length, 2); assert.equal(media.state, 'ready');
+});
+test('close during Device.load invalidates the open and never creates transports', async () => {
+  const attachment = new EventTarget(); attachment.readyState = 'attached'; let finish, creates = 0;
+  attachment.media = async () => ({ epoch: 'epoch', value: { rtpCapabilities: {} } });
+  class FakeDevice { load() { return new Promise(resolve => { finish = resolve; }); } createSendTransport() { creates++; } }
+  const media = new MediaLab(attachment, { Device: FakeDevice }), opening = media.open();
+  for (let i = 0; !finish && i < 20; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.ok(finish, 'Device.load reached'); media.closeTransports(); finish(); await assert.rejects(opening, /MEDIA_CANCELED/); assert.equal(creates, 0);
+});
