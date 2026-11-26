@@ -1,6 +1,8 @@
 # ZoomClone
 
-A small peer-to-peer meeting prototype built in three milestones: a TCP meeting service, a Chord-style discovery overlay, and coordination for shared resources and video presentation. The project runs locally with Node.js and has no build step.
+A local distributed meeting project being redesigned around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. The new backend is headless; durable participant sessions, the production participant protocol and media/UI integration remain unfinished.
+
+Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md), [runtime guide](docs/remote-runtimes.md) and [new discovery service](docs/chord-discovery.md). `npm run start:discovery` runs a configured discovery peer; runtimes can use its service hints to find authenticated Raft helpers. New backend checks require installed npm dependencies, Go and Docker as documented in those guides. The original application commands below are legacy demonstrations and may be replaced during implementation.
 
 ## Setup
 
@@ -21,9 +23,9 @@ For windows systems
 winget install OpenJS.NodeJS.LTS
 ```
 
-`npm install` is only needed for type checking. The demos and services use Node's built-in TypeScript support and can run without installing dependencies.
+Run `npm install` for the PostgreSQL driver and development tools. TypeScript entry points use Node's built-in TypeScript support.
 
-## Use the meeting service
+## Legacy meeting service
 
 ### Start a local peer network
 
@@ -73,7 +75,7 @@ node coord_demo.ts     # leader election, locked writes, and failover
 node video_demo.ts     # presenter ordering and video failover
 ```
 
-Keep these scripts as repeatable, end-to-end demonstrations; they complement the hands-on commands above. Run all automated tests with `npm test`, or type-check the project with `npm run typecheck`.
+These legacy scripts complement the hands-on commands above. Run the default automated tests with `npm test`, type-check with `npm run typecheck`, and run the real Raft/PostgreSQL discovery/runtime integration with `npm run test:runtimes`.
 
 ## Project guides
 

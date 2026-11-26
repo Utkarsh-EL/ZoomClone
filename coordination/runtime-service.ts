@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Database, createPool } from "../storage/database.ts";
 import { MeetingStore } from "../storage/meeting-store.ts";
 import { HelperClient } from "./helper-client.ts";
+import { DiscoveryClient } from "./discovery-client.ts";
+import { DiscoveredHelpers } from "./discovered-helpers.ts";
 import { LeaderRoute } from "./helper-route.ts";
 import { RuntimeAgent, type RuntimeOptions } from "./runtime-agent.ts";
 import { serveRuntime } from "./runtime-rpc.ts";
@@ -13,6 +15,7 @@ export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"
   token: string;
   callers: string[];
   helpers: { helperId: string; address: string }[];
+  discovery?: { bootstraps: string[]; token: string; timeoutMs?: number };
   helperToken: string;
   helperTimeoutMs?: number;
   connectionString: string;
@@ -24,8 +27,11 @@ export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"
 export async function startMeetingRuntime(config: MeetingRuntimeConfig, report: (meetingId: string, error?: Error) => void) {
   const identity = { clusterId: config.clusterId, nodeId: config.runtimeId, incarnation: config.incarnation ?? randomUUID() };
   const wire = new ControlWire(identity);
-  const helper = new LeaderRoute(config.helpers.map(route => new HelperClient({ ...route, ...identity,
-    token: config.helperToken, timeoutMs: config.helperTimeoutMs }, wire)));
+  const helper = config.discovery
+    ? new DiscoveredHelpers({ identity, token: config.helperToken, timeoutMs: config.helperTimeoutMs,
+      discovery: new DiscoveryClient({ ...config.discovery, identity }, wire) }, wire)
+    : new LeaderRoute(config.helpers.map(route => new HelperClient({ ...route, ...identity,
+      token: config.helperToken, timeoutMs: config.helperTimeoutMs }, wire)));
   const db = await Database.open({ clusterId: config.clusterId, connectionString: config.connectionString });
   const pool = createPool(config.runtimeConnectionString);
   const store = new MeetingStore(db, pool);

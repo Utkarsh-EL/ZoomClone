@@ -2,7 +2,7 @@
 
 Date: 2026-11-21
 Revised: 2026-11-25
-Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md), [headless ownership activation](../../ownership-activation.md) and [authenticated loopback runtimes with renewal scheduling](../../remote-runtimes.md) implemented on `milestone-5`. Discovery, participant migration and broader network deployment remain integration work. The full design is not yet implemented or validated.
+Status: revised architecture proposal; coordinator, [consensus repair](../../consensus-safety.md), [PostgreSQL storage foundations](../../postgresql-fencing.md), [headless ownership activation](../../ownership-activation.md), [authenticated loopback runtimes with renewal scheduling](../../remote-runtimes.md) and [128-bit discovery](../../chord-discovery.md) implemented on `milestone-5`. Durable ClientSession, participant migration and broader network deployment remain integration work. The full design is not yet implemented or validated.
 
 ## 1. Purpose and current decisions
 
@@ -12,7 +12,7 @@ This document is the current design proposal. It supersedes its earlier SQLite, 
 
 ### Confirmed direction
 
-- Develop incrementally, preserving useful protocol work and existing demonstrations during migration.
+- Develop incrementally toward the finished product. Original application APIs, protocols, demonstrations and development data may be replaced freely; preserve the new Raft/PostgreSQL/runtime foundations and their safety and durability guarantees. This clarification supersedes earlier migration compatibility requirements.
 - Keep backend coordination peers separate from participant clients and meeting runtimes.
 - Use Chord for peer-based discovery and an existing Raft implementation for coordinator agreement.
 - Support even and odd coordinator configurations, including agreed voter addition/removal. Four peers is an assignment minimum; five is the default demo preset.

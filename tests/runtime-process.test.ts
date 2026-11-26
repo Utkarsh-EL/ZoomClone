@@ -11,12 +11,13 @@ import { RemoteRuntime, availableRuntimes } from "../coordination/runtime-rpc.ts
 import type { CommandResult, MetadataState } from "../coordination/helper-client.ts";
 import { startMeetingRuntime } from "../coordination/runtime-service.ts";
 import { ControlWire } from "../coordination/wire.ts";
+import { serveDiscovery } from "../coordination/discovery-rpc.ts";
 
 const clusterId = process.env.ZOOM_STORAGE_CLUSTER_ID!;
 const connectionString = process.env.ZOOM_STORAGE_ADMIN_URL!;
 if (!connectionString) throw new Error("Run npm run test:runtimes");
 
-test("independent remote runtimes renew, survive leader change and recover retained outcomes after two crashes", { timeout: 120000 }, async () => {
+test("independent remote runtimes discover helpers, renew, survive leader change and recover retained outcomes after two crashes", { timeout: 120000 }, async () => {
   const lab = await CoordinatorLab.create(3, clusterId);
   const db = await Database.open({ connectionString, clusterId });
   const pool = createPool(connectionString), store = new MeetingStore(db, pool);
@@ -24,6 +25,8 @@ test("independent remote runtimes renew, survive leader change and recover retai
   const wire = new ControlWire(identity);
   const runtimeURL = new URL(connectionString); runtimeURL.username = "zoom_runtime"; runtimeURL.password = process.env.ZOOM_STORAGE_RUNTIME_PASSWORD!;
   const children: ChildProcess[] = [];
+  const discovery: Awaited<ReturnType<typeof serveDiscovery>>[] = [];
+  const discoveryToken = randomBytes(32).toString("hex");
   const closed = new Map<ChildProcess, Promise<unknown>>();
   async function request(child: ChildProcess, operation: string, body: object = {}): Promise<any> {
     const id = randomUUID();
@@ -40,7 +43,8 @@ test("independent remote runtimes renew, survive leader change and recover retai
     const incarnation = randomUUID(), token = randomBytes(32).toString("hex");
     const config = { clusterId, runtimeId, incarnation, expectedRevision, intervalMs: 60, readinessMs: 1200,
       address: "127.0.0.1:0", callers: [callerId], token, helperToken: lab.token,
-      helpers: lab.nodes.map(n => ({ helperId: n.id, address: n.address })), helperTimeoutMs: 300,
+      helpers: [], helperTimeoutMs: 300,
+      discovery: { token: discoveryToken, bootstraps: discovery.map(peer => peer.address), timeoutMs: 700 },
       connectionString, runtimeConnectionString: runtimeURL.href };
     const child = fork(new URL("./fixtures/runtime-child.ts", import.meta.url), [], { windowsHide: true,
       stdio: ["ignore", "ignore", "inherit", "ipc"], env: { ...process.env, ZOOM_RUNTIME_CONFIG: JSON.stringify(config) } });
@@ -56,6 +60,11 @@ test("independent remote runtimes renew, survive leader change and recover retai
   }
   async function crash(child: ChildProcess) { child.kill("SIGKILL"); await closed.get(child); }
   try {
+    for (let i = 0; i < 4; i++) discovery.push(await serveDiscovery({ clusterId, nodeId: randomUUID(), incarnation: randomUUID(),
+      token: discoveryToken, address: "127.0.0.1:0", ...(i === 0 ? { initialize: true } : { bootstraps: [discovery[0].address] }),
+      announcements: [{ namespace: "service", name: "coordinators", generation: 1,
+        value: { helpers: lab.nodes.map(n => ({ helperId: n.id, address: n.address })) } }] }));
+    for (let round = 0; round < 6; round++) for (const peer of discovery) await peer.node.maintain(0);
     let leader = await lab.leader(), helper = lab.connection(leader);
     const nodes = [await start(), await start(), await start()];
     const routes = nodes.map(n => n.remote);
@@ -70,6 +79,7 @@ test("independent remote runtimes renew, survive leader change and recover retai
     const join: MeetingCommand = { id: randomUUID(), participantId: randomUUID(), secret: randomBytes(32).toString("hex"), lamport: 10, operation: { type: "join", name: "Retained remote" } };
     // A ready probe is an observation, not a reservation across the next refresh.
     const outcome = await until("original command outcome", () => request(nodes[0].child, "execute", { meetingId, command: join }));
+    await discovery[0].close();
     await lab.crash(leader);
     leader = await lab.leader(); helper = lab.connection(leader);
     controller = new RecoveryController(helper, store, { clusterId, suspicionMs: 700 });
@@ -102,6 +112,7 @@ test("independent remote runtimes renew, survive leader change and recover retai
   } finally {
     for (const child of children) { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }
     await Promise.allSettled([...closed.values()]);
+    await Promise.allSettled(discovery.map(peer => peer.close()));
     await pool.end(); await db.close(); await lab.stop();
   }
 });

@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-25",
+  "branch": "milestone-5",
+  "checkpoint": "namespaced 128-bit Chord discovery integrated with runtime helper routing",
+  "coordinatorStorageVersion": 3,
+  "verification": [
+    { "command": "npm test", "passed": 95, "failed": 0 },
+    { "command": "npm run typecheck", "result": "passed" },
+    {
+      "command": "npm run test:runtimes",
+      "lab": "zoom-storage-43092535",
+      "storageTestsPassed": 7,
+      "storageFaultTestsPassed": 4,
+      "recoveryTestsPassed": 2,
+      "runtimeProcessTestsPassed": 2,
+      "failed": 0
+    }
+  ],
+  "coverage": [
+    "Cluster and namespace separation, bigint arithmetic and canonical 32-digit hexadecimal wire IDs",
+    "Twelve-peer convergence, 128 fingers and an actual shortcut across the ring",
+    "Two consecutive successor failures, replicated hints and expiry",
+    "Dead and stalled bootstrap fallback including two blackholes before a healthy third, bounded total time and hop traversal",
+    "Failed hint owners are excluded during routing before stale remote successor lists stabilize",
+    "Single-peer isolation, both peers losing all neighbors and surviving subrings merging after healing",
+    "Reordered TTL refresh cannot shorten retained hint expiry",
+    "Malformed initialize flags cannot bypass explicit bootstrap",
+    "Authenticated four-peer HTTP discovery, cluster/incarnation correlation and malformed/oversized frame refusal",
+    "Private configuration excluded from serialized identities and runtime discovery shares its process Lamport clock",
+    "Shutdown drains pending lookup handlers and maintenance",
+    "Backend discovers actual helper destinations; healthy cached barrier reads bypass discovery and uncertain writes are sent once",
+    "Independent runtime children use discovered helper routes through discovery-bootstrap loss, Raft-leader loss, two runtime crashes and recovery",
+    "Retained command outcome/membership, old SQL owner fencing, restarted-incarnation refusal and readiness withdrawal on quorum loss"
+  ],
+  "review": {
+    "kind": "independent read-only review with reproduced failure regressions",
+    "fixed": [
+      "Partition healing for isolated peers and live subrings",
+      "String initialization flag creating an unintended singleton",
+      "Delayed refresh rolling TTL backward",
+      "Discovery delay starving otherwise healthy cached-helper renewals",
+      "Lookup handlers outliving service close",
+      "Separate discovery clock for the same runtime incarnation"
+    ]
+  },
+  "additionalRegressionFixed": "Full-suite run exposed routing through a dead hint owner still advertised by remote peers; bounded route exclusions now allow successor fallback before stabilization",
+  "limits": [
+    "Literal loopback trusted-backend token transport; no LAN or container-network deployment claim",
+    "Volatile bounded hints can be stale or temporarily missing during churn; producers republish",
+    "Discovery never authorizes ownership, voting, SQL writes or runtime service",
+    "Discovery integration covers helper routes; runtime route provisioning is still explicit",
+    "Domain commands in process scenarios still use the evidence-only IPC fixture",
+    "Durable ClientSession, production participant transport, subscription cursors and SFU remain unimplemented",
+    "Raft dependency/consensus-only suites were not rerun in this increment; their implementation was not changed"
+  ]
+}
