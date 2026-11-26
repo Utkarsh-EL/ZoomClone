@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-26",
+  "base": "be0dc1d",
+  "implementation": "3609d91",
+  "result": "passed",
+  "tests": {
+    "default": "107/107",
+    "typecheck": "passed",
+    "nativeMedia": "1/1",
+    "nativeBrowser": "1/1",
+    "storageRecoveryRuntimes": "16/16",
+    "consensusOnly": "not rerun"
+  },
+  "mediaLab": "zoom-storage-3e5742ec",
+  "runtimeLab": "zoom-storage-47e314e3",
+  "nativeMediaBodyMs": 38401.1788,
+  "sfuFaultThroughReceptionMs": 6373.039,
+  "productionParticipantRecoveryMs": 12986.9796,
+  "review": {
+    "independent": true,
+    "critical": 0,
+    "important": 3,
+    "findings": "queued close/reopen reservation loss; recovered dirty cleanup loses queued peer; failed authorization exhausts shared room",
+    "disposition": "all reproduced RED then fixed GREEN",
+    "secondIndependentVerdict": false,
+    "deferredMinors": []
+  },
+  "preserved": [
+    "one shared ClientSession and journal",
+    "original durable command IDs and uncertainty",
+    "unfiltered subscription revision zero",
+    "SQL schema and owner fences",
+    "runtime readiness and renewal values",
+    "domain retry jitter"
+  ],
+  "limits": [
+    "participant capture widgets and automatic reconnect remain unfinished",
+    "current-state reconciliation before controls; no continuous background media intention reconciler",
+    "media-test runtimes share one host process; browsers and SFU are independent processes",
+    "separate runtime suite uses independent runtime/participant processes",
+    "physical devices, audible playback, browser toolbar Stop sharing, multi-device/TURN and independent-host resilience unproved",
+    "failed external teardown reports uncertainty; dependency failure does not imply existing RTP stopped"
+  ],
+  "artifacts": [
+    "native.json",
+    "default.txt",
+    "typecheck.txt",
+    "native.txt",
+    "browser.txt",
+    "runtimes.txt"
+  ]
+}

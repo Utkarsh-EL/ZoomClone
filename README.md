@@ -1,6 +1,6 @@
 # ZoomClone
 
-A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and the secured loopback participant UI share one session, with roster, paged history, pending outcomes, share queue and local capture-owner controls. An opt-in [capture/SFU feasibility harness](docs/media-feasibility.md) exchanges native browser media through mediasoup. Full participant media integration, subscriptions and broader deployment remain unfinished.
+A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and the secured loopback participant UI share one session, with roster, paged history, pending outcomes, share queue and local capture-owner controls. Optional [production media composition](docs/production-media.md) routes native browser media through provisioned runtimes/SFUs with fresh SQL authorization. Participant capture widgets, subscriptions and broader deployment remain unfinished.
 
 Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md) for implemented behavior, evidence, limitations, and the exact next action. The [current design](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) describes the intended product.
 
@@ -35,7 +35,7 @@ See [participant sessions](docs/client-sessions.md) for runtime/agent configurat
 | `npm test` | Current TypeScript backend, wire, discovery, engine and runtime adapter tests. |
 | `npm run typecheck` | TypeScript checks for current source, scripts and tests. |
 | `npm run test:browser` | Native Chromium UI controls, history/reload, shared CLI identity/pending work, uncertainty, share/leave and capture leases. |
-| `npm run test:media` | Opt-in native two-browser mediasoup capture, denial/cancel/ended, SQL grants/runtime readiness, lease revocation, independent chat and SFU crash/rebuild; build its Docker image first. |
+| `npm run test:media` | Production media routes, native two-browser capture, SQL/runtime/lease/epoch fences, SFU restart, directed takeover/isolation and shutdown drain; build its Docker image first. |
 | `npm run test:coordinator` | Raft dependency safety regressions, helper suite, vet, build and process scenario. |
 | `npm run test:consensus` | Additional dependency/helper race and process checks. |
 | `npm run test:storage` | Real PostgreSQL fencing, transactions, inspection and restart tests. |
@@ -52,6 +52,7 @@ See [participant sessions](docs/client-sessions.md) for runtime/agent configurat
 - [128-bit Chord discovery and helper routing](docs/chord-discovery.md)
 - [Durable participant sessions and production replay](docs/client-sessions.md)
 - [Bounded capture/SFU feasibility](docs/media-feasibility.md)
+- [Provisioned production media composition](docs/production-media.md)
 - [Assignment requirements](docs/assignment-reqs.txt)
 
 Checkpoint evidence under `evidence/` records the code and checks at each checkpoint. Older milestone evidence and superseded design records are historical; they do not establish the current backend's guarantees.

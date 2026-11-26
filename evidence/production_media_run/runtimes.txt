@@ -1,0 +1,59 @@
+npm notice run test:runtimes
+npm notice run node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes
+PostgreSQL evidence lab: zoom-storage-47e314e3
+✔ database bootstrap is explicit, durable, and bound to the cluster (205.525ms)
+✔ fences reject old owners, same-generation mismatches, late activation and CLOSED recovery (331.9795ms)
+✔ screen handoff commits state, contiguous events, stable outcome and reconciliation intention together (233.4497ms)
+✔ a fence lock blocks mutations but not consistent reads or another meeting (977.6861ms)
+✔ old-command/takeover races have one fenced order and a durable retry outcome (199.0655ms)
+✔ failed handoff rolls back state, sequence, outcome and media intention (250.6945ms)
+✔ in-flight caller mutation cannot redirect a command outside its locked meeting (185.0619ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2742.175
+✔ paused client loses its idle transaction lock; recovery never bypasses the fence (3709.56ms)
+✔ restricted inspector reads without the fence and cannot expose credentials or write (257.6646ms)
+✔ failed new-lab readiness cleans only its owned service and retains the volume (6495.2997ms)
+✔ PostgreSQL restart retains identity, ownership, events and stable outcomes (3170.1813ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14044.0489
+✔ activation resumes after every durable boundary and fences a returning owner (7662.7661ms)
+✔ lost replies after each Raft and SQL commit resolve the same attempt (1264.8502ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9429.321
+✔ independent remote runtimes discover helpers, renew, survive leader change and recover retained outcomes after two crashes (7626.8379ms)
+✔ terminal registration conflict releases the runtime listener and database pools (794.9779ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8974.8583
+✔ production agents retain uncertain join/chat through process restart and two runtime crashes, then replay and refuse quorum loss (12986.9796ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13425.6387

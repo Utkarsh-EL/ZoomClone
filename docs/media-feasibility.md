@@ -1,5 +1,7 @@
 # Bounded capture/SFU feasibility
 
+Historical checkpoint below. The current harness now exercises [provisioned production media composition](production-media.md), including runtime takeover/isolation and explicit drain. Its SFU provisioning uses `MEDIA_MEETING_ID` and `MEDIA_CALLERS`, replacing the original single caller environment field.
+
 This opt-in harness continues `cbc3a47`. It connects two real Chromium processes to a mediasoup worker in an owned Linux container, using PostgreSQL, three real Raft helpers, a registered production runtime and two durable participant sessions. The normal participant page still exposes logical capture/share controls; full media UI and executable deployment integration remain follow-up work.
 
 Run with Docker Desktop running, Node >=24.16, Go and a Chromium installation:

@@ -1,0 +1,26 @@
+npm notice run test:media
+npm notice run node scripts/coordinator-build.ts && node scripts/media-build.ts && node --test tests/media-native.test.ts
+media check: real PostgreSQL, three helpers, provisioned runtime route and two distinct shared sessions
+media check: native camera permission denial
+media check: bidirectional native audio/video
+media check: stale screen grant rejected before producer creation
+media check: native display capture received
+media check: native browser source ended, exact single release
+media check: native display picker cancel
+media check: lease replacement stops original capture and successor remains usable
+media check: SFU crash leaves chat usable, explicit media rebuild with new epoch
+media check: browser and CLI retain identity, original command IDs and unfiltered revision zero
+media check: real TCP isolation: takeover chat works, old runtime and stale SQL authority refuse new media
+media check: successor reconciles same provisioned SFU after healing
+media check: old runtime drain cannot tear down successor-owned transports
+media check: separate bounded persisted effect observations exclude participant credentials
+media check: participant shutdown explicitly drains local media cleanup before journal close
+✔ two native browsers exchange SFU capture under SQL/runtime and local lease fences, then rebuild after SFU crash (38401.1788ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39482.3553
