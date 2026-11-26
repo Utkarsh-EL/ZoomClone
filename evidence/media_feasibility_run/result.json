@@ -1,0 +1,31 @@
+{
+  "base": "cbc3a47",
+  "increments": {
+    "authorityAdapter": "35a5b2a",
+    "nativeMediaFeasibility": "5a1de88",
+    "verifiedReviewFixes": "324803b"
+  },
+  "finalChecks": {
+    "default": { "passed": 89, "failed": 0, "transcript": "unit-final.txt" },
+    "typecheck": "passed",
+    "nativeMedia": { "passed": 1, "failed": 0, "bodyMs": 25193.028, "storageLab": "zoom-storage-5b78c4cf", "evidence": "native-final.json", "transcript": "native-final.txt" }
+  },
+  "checksOnReviewedIncrement5a1de88": {
+    "nativeParticipantUI": { "passed": 1, "failed": 0, "transcript": "browser.txt" },
+    "existingStorageHelperRuntimeSuite": { "passed": 16, "failed": 0, "storageLab": "zoom-storage-b4697f50", "participantBodyMs": 12394.074, "transcript": "runtimes.txt" },
+    "nativeMedia": { "passed": 1, "failed": 0, "evidence": "native.json", "transcript": "native.txt" }
+  },
+  "review": {
+    "range": "cbc3a47..5a1de88",
+    "independentReadOnly": true,
+    "critical": 0,
+    "important": 2,
+    "minorRegradedImportantByAuthor": 1,
+    "allThreeReproducedRedThenGreen": true,
+    "fixPass": "324803b",
+    "secondIndependentVerdict": false,
+    "ledger": "../../docs/superpowers/plans/2026-11-25-media-feasibility.md"
+  },
+  "unchanged": ["ClientSession identity, pending IDs, inbox and uncertainty", "Raft storage version 3", "PostgreSQL schema/fences", "production readiness", "participant retry jitter", "unfiltered subscription revision zero", "provisioned runtime routes/incarnations"],
+  "limits": ["opt-in in-process feasibility composition, full executable/participant integration deferred", "localhost process failure on one Windows/Docker host", "native fake camera/microphone devices and muted playback", "real getDisplayMedia selected-tab capture; source closure triggers native ended, toolbar Stop sharing not automated", "explicit media reconnect; no automatic supervision", "attachment shutdown does not await SFU quiescence; harness destroys its owned container", "fresh SQL authorization and SFU effects are separate transactions", "runtime-takeover/media-isolation acceptance and persisted effect observations deferred", "physical devices, audible playback, TURN and school-network paths unproved", "no separate consensus-only rerun"]
+}

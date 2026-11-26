@@ -1,0 +1,147 @@
+{
+  "base": "cbc3a47",
+  "storageLab": "zoom-storage-5b78c4cf",
+  "mediaContainer": "zoom-media-871d4057",
+  "checks": [
+    {
+      "name": "real PostgreSQL, three helpers, provisioned runtime route and two distinct shared sessions",
+      "value": true
+    },
+    {
+      "name": "native camera permission denial",
+      "value": "NotAllowedError"
+    },
+    {
+      "name": "bidirectional native audio/video",
+      "value": [
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 1734,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 9781,
+            "frames": 5
+          }
+        ],
+        [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 178,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 3725,
+            "frames": 1
+          }
+        ]
+      ]
+    },
+    {
+      "name": "stale screen grant rejected before producer creation",
+      "value": true
+    },
+    {
+      "name": "native display capture received",
+      "value": [
+        {
+          "kind": "audio",
+          "source": "mic",
+          "bytes": 2613,
+          "frames": 0
+        },
+        {
+          "kind": "video",
+          "source": "camera",
+          "bytes": 19484,
+          "frames": 11
+        },
+        {
+          "kind": "video",
+          "source": "screen",
+          "bytes": 880,
+          "frames": 1
+        }
+      ]
+    },
+    {
+      "name": "native browser source ended, exact single release",
+      "value": {
+        "commandId": "32bd50d2-accf-4755-ba23-47de531057b8",
+        "requestId": "9736b02b-93d7-4acc-8319-1b178ad2f9f8"
+      }
+    },
+    {
+      "name": "native display picker cancel",
+      "value": "NotAllowedError"
+    },
+    {
+      "name": "lease replacement stops original capture and successor remains usable",
+      "value": true
+    },
+    {
+      "name": "SFU crash leaves chat usable, explicit media rebuild with new epoch",
+      "value": {
+        "elapsedMs": 5549.322400000001,
+        "stats": [
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 939,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 6847,
+              "frames": 4
+            }
+          ],
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 121,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 3301,
+              "frames": 1
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "name": "browser and CLI retain identity, original command IDs and unfiltered revision zero",
+      "value": true
+    },
+    {
+      "name": "stopped runtime refuses new media despite retained browser state",
+      "value": true
+    }
+  ],
+  "runtimeRenewals": {
+    "ok": 21,
+    "errors": {
+      "node is not the leader": 1
+    }
+  },
+  "lastRenewalAtMs": 22685.8458,
+  "maxAuthorizationMs": 73.1823000000004,
+  "authorizationRejections": {
+    "NOT_READY": 30
+  },
+  "lastRejectedRenewalAgeMs": 724.9267,
+  "result": "passed"
+}

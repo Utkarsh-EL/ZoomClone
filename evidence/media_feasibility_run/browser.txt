@@ -1,0 +1,12 @@
+npm notice run test:browser
+npm notice run node --test tests/browser-native.test.ts
+{"browser":"C:/Program Files/Google/Chrome/Application/chrome.exe","checks":["native UI controls","history paging/reload","CLI identity and pending IDs","command review retains open state/focus during CLI traffic","untrusted text","capture replacement/release","queued share cancellation","resolved request/grant/release","interrupted UI reply/reload/manual review without resubmit","explicit pending/resolved leave","shutdown"],"participantId":"35d9031f-8c72-45e3-93cd-e94434dc6923"}
+✔ native browser reload and CLI retain one identity, pending IDs, inbox and fenced capture (3188.435ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3546.7027
