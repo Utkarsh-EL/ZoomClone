@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ParticipantModel } from "../client/participant-model.js";
+import { MediaLab } from "../client/media-lab.js";
+import { ParticipantMedia } from "../client/participant-media.js";
 
 class Attachment extends EventTarget {
   readyState = "attached";
@@ -52,6 +54,30 @@ test('captured release never waits out a busy command or releases a replacement 
   f.model.busy = true;
   assert.equal(await f.model.releaseCaptured({ requestId: 'captured', grantVersion: 8 }), null);
   f.model.busy = false; await f.model.refresh(); assert.equal(f.attachment.submissions.length, 0);
+});
+
+test('manual turn resolution clears media review while command review alone preserves the unresolved turn', async () => {
+  const f = fixture(); f.attachment.ownsCapture = true;
+  f.attachment.state.holder = { participantId: 'me', requestId: 'captured' }; f.attachment.state.grantVersion = 7;
+  await f.model.refresh();
+  const media = new MediaLab(f.attachment, { release: grant => f.model.releaseCaptured(grant) });
+  media.capture.publish = async () => ({ id: 'screen' }); media.capture.closeProducer = async () => {};
+  const controller = new ParticipantMedia(f.model, f.attachment, media);
+  try {
+    const track = new EventTarget(); track.readyState = 'live'; track.stop = () => { track.readyState = 'ended'; };
+    await media.capture.start('screen', async () => ({ getTracks: () => [track] }), { requestId: 'captured', grantVersion: 7 });
+    f.model.uncertain = true; await media.capture.stop('screen', true);
+    assert.equal(media.capture.releaseNeedsReview, true); assert.equal(f.model.uncertain, true);
+    f.model.reviewUncertain(); assert.equal(media.capture.releaseNeedsReview, true);
+    assert.deepEqual(f.attachment.submissions, []);
+    await f.model.submit({ type: 'release-share', requestId: 'captured' });
+    assert.equal(media.capture.releaseNeedsReview, true, 'pending command does not prove turn resolution');
+    f.attachment.state.holder = null; f.attachment.state.grantVersion = 8;
+    f.model.uncertain = true; await f.model.refresh();
+    assert.equal(media.capture.releaseNeedsReview, false);
+    assert.equal(f.model.uncertain, true, 'display reconciliation must not clear submission uncertainty');
+    assert.deepEqual(f.attachment.submissions, [{ type: 'release-share', requestId: 'captured' }]);
+  } finally { controller.dispose(); f.model.dispose(); }
 });
 
 test("history is a bounded unfiltered page, browsing stays put and latest follows the inbox", async () => {

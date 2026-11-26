@@ -83,6 +83,73 @@ test('a reconnect publication completing after Stop also closes its server produ
 });
 
 const view = (holder = { participantId: 'me', requestId: 'grant' }, grantVersion = 7) => ({ participantId: 'me', observation: { state: { members: { me: { joined: true } }, holder, grantVersion } } });
+
+test('release review follows the exact observed turn without submitting a deferred command', async () => {
+  for (const next of [view(null), view({ participantId: 'other', requestId: 'grant' }), view({ participantId: 'me', requestId: 'next' }), view(undefined, 8)]) {
+    const f = fixture(); f.capture.reconcile(view()); f.capture.release = async () => null;
+    await f.capture.start('screen', async () => ({ getTracks: () => [f.track()] }), { requestId: 'grant', grantVersion: 7 });
+    await f.capture.stop('screen', true);
+    assert.equal(f.capture.releaseNeedsReview, true);
+    f.capture.reconcile(view()); assert.equal(f.capture.releaseNeedsReview, true);
+    f.capture.reconcile(next); assert.equal(f.capture.releaseNeedsReview, false);
+    assert.deepEqual(f.submitted, []);
+  }
+});
+
+test('only an installed later screen clears applicable review, not camera or canceled selection', async () => {
+  const f = fixture(); f.capture.reconcile(view()); f.capture.release = async () => { throw new Error('TIMEOUT'); };
+  const start = source => f.capture.start(source, async () => ({ getTracks: () => [f.track()] }), source === 'screen' ? { requestId: 'grant', grantVersion: 7 } : undefined);
+  await start('screen'); await f.capture.stop('screen', true);
+  assert.equal(f.capture.releaseNeedsReview, true); assert.equal(f.capture.releaseUncertain, true);
+  await start('camera'); assert.equal(f.capture.releaseNeedsReview, true);
+  await assert.rejects(f.capture.start('screen', async () => { throw new Error('CANCELED'); }, { requestId: 'grant', grantVersion: 7 }), /CANCELED/);
+  assert.equal(f.capture.releaseNeedsReview, true);
+  await start('screen');
+  assert.equal(f.capture.releaseNeedsReview, false); assert.equal(f.capture.releaseUncertain, false);
+  assert.equal(f.capture.tracks.get('screen').track.readyState, 'live');
+  assert.deepEqual(f.submitted, []); f.capture.revoke();
+});
+
+test('late declined or uncertain release cannot restore review after turn resolution or later capture', async () => {
+  for (const transition of ['resolved', 'capture']) for (const outcome of ['declined', 'uncertain']) {
+    const f = fixture(); f.capture.reconcile(view()); let finish;
+    f.capture.release = () => new Promise((resolve, reject) => { finish = () => outcome === 'declined' ? resolve(null) : reject(new Error('TIMEOUT')); });
+    const start = () => f.capture.start('screen', async () => ({ getTracks: () => [f.track()] }), { requestId: 'grant', grantVersion: 7 });
+    await start(); const stopped = f.capture.stop('screen', true);
+    if (transition === 'resolved') f.capture.reconcile(view(null)); else await start();
+    finish(); await stopped;
+    assert.equal(f.capture.releaseNeedsReview, false, `${transition}/${outcome}`);
+    assert.equal(f.capture.releaseUncertain, false);
+    assert.deepEqual(f.submitted, []); f.capture.revoke();
+  }
+});
+
+test('an old release acceptance cannot overwrite a newer release needing review', async () => {
+  const f = fixture(); f.capture.reconcile(view()); let finish;
+  f.capture.release = () => new Promise(resolve => { finish = resolve; });
+  const start = () => f.capture.start('screen', async () => ({ getTracks: () => [f.track()] }), { requestId: 'grant', grantVersion: 7 });
+  await start(); const first = f.capture.stop('screen', true);
+  await start(); f.capture.release = async () => null; await f.capture.stop('screen', true);
+  assert.equal(f.capture.releaseNeedsReview, true);
+  finish('old-command'); await first;
+  assert.equal(f.capture.releaseNeedsReview, true); assert.equal(f.capture.releaseCommandId, null);
+});
+
+test('turn resolution before or after acceptance preserves the original release command ID', async () => {
+  for (const beforeAcceptance of [true, false]) {
+    const f = fixture(); f.capture.reconcile(view());
+    f.capture.release = async () => {
+      if (beforeAcceptance) f.capture.reconcile(view(null));
+      return 'saved-original-release';
+    };
+    await f.capture.start('screen', async () => ({ getTracks: () => [f.track()] }), { requestId: 'grant', grantVersion: 7 });
+    await f.capture.stop('screen', true);
+    if (!beforeAcceptance) f.capture.reconcile(view(null));
+    assert.equal(f.capture.releaseNeedsReview, false);
+    assert.equal(f.capture.releaseCommandId, 'saved-original-release');
+  }
+});
+
 test('grant replacement cancels pending screen permission and stops only the old screen', async () => {
   const f = fixture(), screen = f.track(), camera = f.track(); let finish;
   f.capture.reconcile(view());

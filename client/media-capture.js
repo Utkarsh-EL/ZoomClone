@@ -1,9 +1,10 @@
 // Small capture lifecycle boundary shared by the native feasibility harness.
 export class CaptureController extends EventTarget {
   tracks = new Map();
-  releaseCommandId = null;
-  releaseUncertain = false;
-  releaseNeedsReview = false;
+  #releaseAttempt;
+  get releaseCommandId() { return this.#releaseAttempt?.commandId ?? null; }
+  get releaseUncertain() { return !!(this.#releaseAttempt?.relevant && this.#releaseAttempt.uncertain); }
+  get releaseNeedsReview() { return !!(this.#releaseAttempt?.relevant && this.#releaseAttempt.needsReview); }
   #revision = 0;
   #attempts = new Map();
   #pending = new Map();
@@ -30,6 +31,11 @@ export class CaptureController extends EventTarget {
   }
   reconcile(view, leaving = false) {
     this.#view = view; this.#leaving = leaving;
+    if (this.#releaseAttempt?.relevant && !this.allowed('screen', this.#releaseAttempt.grant)) {
+      // Keep the original command ID observable even when the post-submit
+      // refresh resolves the turn before its acceptance reply reaches us.
+      this.#releaseAttempt.relevant = false; this.changed();
+    }
     for (const [source, grant] of this.#pending) if (!this.allowed(source, grant)) void this.stop(source);
     for (const [source, entry] of this.tracks) if (!this.allowed(source, entry.grant)) void this.stop(source);
   }
@@ -56,7 +62,11 @@ export class CaptureController extends EventTarget {
     if (!track) throw new Error('NO_CAPTURE_TRACK');
     await this.#stop(source);
     if (!current()) { track.stop(); throw new Error('CAPTURE_REVOKED'); }
-    const entry = { track, grant, producer: null, leaseRevision: lease }; this.tracks.set(source, entry); this.changed();
+    const entry = { track, grant, producer: null, leaseRevision: lease };
+    // A new selected display supersedes review of a previously stopped one.
+    // Canceled permission and unrelated sources leave that review intact.
+    if (source === 'screen') this.#releaseAttempt = null;
+    this.tracks.set(source, entry); this.changed();
     track.addEventListener('ended', () => { if (this.tracks.get(source) === entry) void this.stop(source, true); }, { once: true });
     try {
       entry.producer = await this.publish(source, track, grant);
@@ -76,8 +86,12 @@ export class CaptureController extends EventTarget {
     this.tracks.delete(source); entry.track.stop(); this.changed();
     // Persist the exact durable release before waiting for a failed SFU.
     if (release && source === 'screen' && entry.grant && this.attachment.ownsCapture) {
-      try { this.releaseCommandId = await this.release(entry.grant); this.releaseNeedsReview = !this.releaseCommandId; }
-      catch { this.releaseUncertain = true; this.releaseNeedsReview = true; }
+      const attempt = { grant: entry.grant, commandId: null, uncertain: false, needsReview: false, relevant: this.allowed('screen', entry.grant) };
+      this.#releaseAttempt = attempt;
+      // Settle only this attempt. Reconciliation or a later display/release can
+      // supersede its status while the shared command acceptance is in flight.
+      try { attempt.commandId = await this.release(entry.grant); attempt.needsReview = !attempt.commandId; }
+      catch { attempt.uncertain = true; attempt.needsReview = true; }
       this.changed();
     }
     if (entry.producer) await this.closeProducer(entry.producer.id).catch(() => {});
