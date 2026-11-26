@@ -10,7 +10,7 @@ try {
       time: new Date().toISOString(), ...(error ? { code: /^[A-Z_]+$/.test(error.message) ? error.message : "DEPENDENCY_UNAVAILABLE" } : {}) }));
   });
   console.log(JSON.stringify({ event: "runtime.started", clusterId: config.clusterId, runtimeId: config.runtimeId,
-    incarnation: runtime.agent.identity.incarnation, address: runtime.address, time: new Date().toISOString() }));
+    incarnation: runtime.agent.identity.incarnation, address: runtime.address, participantAddress: runtime.participantAddress, time: new Date().toISOString() }));
   const stop = () => { void runtime.close().catch(() => { process.exitCode = 1; }); };
   process.once("SIGINT", stop); process.once("SIGTERM", stop);
   await runtime.done;

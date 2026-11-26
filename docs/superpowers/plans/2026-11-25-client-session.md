@@ -43,9 +43,9 @@ Files: `client/participant-transport.ts`, `coordination/participant-gateway.ts`,
 
 Interfaces: `serveParticipants(agent, store, options)` exposes `/v1/participant` WebSockets; `ParticipantConnection` implements the task 1 transport; a helper-backed resolver pins READY owner/runtime/incarnation from provisioned participant routes.
 
-- [ ] Write and run failing real-socket tests for authentication, framing, strict owner binding, domain errors, bounds/deadlines and reconnect routing.
-- [ ] Implement stamped request/reply messages using the runtime's shared wire; bound payloads, clients, in-flight work and output buffers; check existing authority on every request.
-- [ ] Compose the gateway into `startMeetingRuntime` and close it with the runtime. Run default tests/typecheck and commit.
+- [x] Write and run failing real-socket tests for authentication, framing, strict owner binding, domain errors, bounds/deadlines and reconnect routing.
+- [x] Implement stamped request/reply messages using the runtime's shared wire; bound payloads, clients, in-flight work and output buffers; check existing authority on every request.
+- [x] Compose the gateway into `startMeetingRuntime` and close it with the runtime. Run default tests/typecheck and commit.
 
 ## Task 3: Real process recovery and handover
 
@@ -66,3 +66,5 @@ Ruling: use a transactional local inbox, so advancing a network cursor never dep
 Pre-flight: Task 2 consumes Task 1 transport signatures; Task 3 consumes Task 2 runtime gateway configuration. All serve the same SQL-authenticated participant identity and revision-0 replay contract.
 
 Task 1 complete: failure-first session tests 5/5, full suite 46/46, typecheck and diff whitespace passed. Local journal uses transactional DELETE journals and FULL synchronization. WebSocket dependencies installed with registry access after sandbox denial; no vulnerabilities reported.
+
+Task 2 complete: failure-first socket tests 4/4, full suite 50/50, typecheck and diff whitespace passed. Reply incarnation validation rejects stale destinations before interpreting their application errors. Runtime composition shares its existing wire and shuts down both ingress listeners.

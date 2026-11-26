@@ -7,6 +7,7 @@ import { DiscoveredHelpers } from "./discovered-helpers.ts";
 import { LeaderRoute } from "./helper-route.ts";
 import { RuntimeAgent, type RuntimeOptions } from "./runtime-agent.ts";
 import { serveRuntime } from "./runtime-rpc.ts";
+import { serveParticipants } from "./participant-gateway.ts";
 import { ControlWire } from "./wire.ts";
 
 export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"> {
@@ -20,6 +21,7 @@ export interface MeetingRuntimeConfig extends Omit<RuntimeOptions, "incarnation"
   helperTimeoutMs?: number;
   connectionString: string;
   runtimeConnectionString: string;
+  participants?: { address: string; token: string; timeoutMs?: number };
 }
 
 /** Composition only: the activation protocol remains in RecoveryController,
@@ -38,16 +40,19 @@ export async function startMeetingRuntime(config: MeetingRuntimeConfig, report: 
   // Do not copy credentials or endpoint configuration into the public identity.
   const abort = new AbortController();
   let agent: RuntimeAgent | undefined;
+  let service: Awaited<ReturnType<typeof serveRuntime>> | undefined;
+  let participants: Awaited<ReturnType<typeof serveParticipants>> | undefined;
   try {
     agent = new RuntimeAgent(helper, store, { ...identity, runtimeId: config.runtimeId, expectedRevision: config.expectedRevision,
       intervalMs: config.intervalMs, readinessMs: config.readinessMs, maxMeetings: config.maxMeetings });
-    const service = await serveRuntime(agent, { address: config.address, token: config.token, callers: config.callers, wire });
+    service = await serveRuntime(agent, { address: config.address, token: config.token, callers: config.callers, wire });
+    if (config.participants) participants = await serveParticipants(agent, store, { ...config.participants, wire });
     const scheduled = agent.run({ signal: abort.signal, report });
     let closing: Promise<void> | undefined;
     const close = () => {
       closing ??= (async () => {
         abort.abort(); agent!.stop();
-        try { await service.close(); await scheduled.catch(() => {}); }
+        try { await Promise.all([service!.close(), participants?.close()]); await scheduled.catch(() => {}); }
         finally { await pool.end(); await db.close(); }
       })();
       return closing;
@@ -56,6 +61,10 @@ export async function startMeetingRuntime(config: MeetingRuntimeConfig, report: 
     // supervisor is present. close waits for the raw scheduler, never itself.
     const done = scheduled.then(close, async error => { await close().catch(() => {}); throw error; });
     void done.catch(() => {});
-    return { agent, store, address: service.address, done, close };
-  } catch (error) { agent?.stop(); await pool.end(); await db.close(); throw error; }
+    return { agent, store, address: service.address, participantAddress: participants?.address, done, close };
+  } catch (error) {
+    abort.abort(); agent?.stop();
+    await Promise.allSettled([service?.close(), participants?.close()]);
+    await pool.end(); await db.close(); throw error;
+  }
 }
