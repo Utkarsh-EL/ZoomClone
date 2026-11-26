@@ -17,6 +17,7 @@ export class MediaRoom {
   private tail: Promise<unknown> = Promise.resolve();
   private waiting = 0;
   private readonly peers = new Set<string>();
+  private readonly revoking = new Map<string, Promise<void>>();
   private readonly effect: (request: MediaRequest) => Promise<unknown>;
   constructor(effect: (request: MediaRequest) => Promise<unknown>) { this.effect = effect; }
   private enqueue<T>(work: () => Promise<T>, cleanup = false): Promise<T> {
@@ -49,6 +50,9 @@ export class MediaRoom {
     });
   }
   revoke(peerId: string): Promise<void> {
-    return this.enqueue(async () => { try { await this.effect({ action: "closePeer", peerId }); } finally { this.peers.delete(peerId); } }, true);
+    const prior = this.revoking.get(peerId); if (prior) return prior;
+    const work = this.enqueue(async () => { try { await this.effect({ action: "closePeer", peerId }); } finally { this.peers.delete(peerId); } }, true)
+      .finally(() => { this.revoking.delete(peerId); });
+    this.revoking.set(peerId, work); return work;
   }
 }

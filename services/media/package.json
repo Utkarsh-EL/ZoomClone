@@ -1,0 +1,6 @@
+{
+  "name": "zoomclone-media-feasibility",
+  "private": true,
+  "type": "module",
+  "dependencies": { "mediasoup": "3.32.2" }
+}

@@ -1,0 +1,9 @@
+**
+!services/
+!services/media/
+!services/media/package.json
+!services/media/package-lock.json
+!services/media/kernel.mjs
+!coordination/
+!coordination/wire.ts
+!coordination/logical-clock.ts

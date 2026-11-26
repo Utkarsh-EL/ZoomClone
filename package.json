@@ -10,19 +10,23 @@
     "test:runtimes": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes",
     "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",
-    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts tests/participant-gateway.test.ts tests/browser-attachment.test.ts tests/participant-ui.test.js",
+    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts tests/participant-gateway.test.ts tests/browser-attachment.test.ts tests/participant-ui.test.js tests/media-room.test.ts tests/media-capture.test.js",
     "start:discovery": "node scripts/discovery-peer.ts",
     "start:participant": "node scripts/participant-agent.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
     "test:coordinator": "node scripts/coordinator-build.ts --check",
     "test:consensus": "node scripts/coordinator-build.ts --consensus",
     "demo:coordinator": "node scripts/coordinator-scenario.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "build:media": "node scripts/media-build.ts",
+    "test:media": "node scripts/coordinator-build.ts && node scripts/media-build.ts && node --test tests/media-native.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
+    "mediasoup-client": "3.26.0",
     "typescript": "7.0.2"
   },
   "dependencies": {

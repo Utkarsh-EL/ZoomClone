@@ -87,6 +87,7 @@ export class BrowserAttachment extends EventTarget {
   submit(operation) { return this.#call("submit", { operation }); }
   claimCapture(captureRevision = this.captureState.revision) { return this.#call("capture.claim", { captureRevision }); }
   releaseCapture(captureRevision = this.captureState.revision) { return this.#call("capture.release", { captureRevision }); }
+  media(request) { return this.#call("media", { media: request }).then(result => result.media); }
   get ownsCapture() { return this.readyState === "attached" && this.captureState.owner?.id === this.attachment?.id && this.captureState.owner?.revision === this.attachment?.revision; }
   close() { this.#socket.close(); }
 }

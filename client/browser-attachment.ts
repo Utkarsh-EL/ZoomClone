@@ -7,10 +7,15 @@ import { ControlWire, UUID_PATTERN, type Envelope } from "../coordination/wire.t
 import { fields, participantTimeout, participantURL, record } from "../coordination/participant-protocol.ts";
 import type { Operation } from "../storage/engine.ts";
 import type { ClientSession } from "./client-session.ts";
+import type { MediaRequest } from "../media/room.ts";
 
 export interface Attachment { id: string; revision: number }
 export interface CaptureLease { revision: number; owner: Attachment | null }
-export interface BrowserOptions { address: string; wire?: ControlWire; timeoutMs?: number; maxClients?: number }
+export interface BrowserOptions {
+  address: string; wire?: ControlWire; timeoutMs?: number; maxClients?: number;
+  /** In-process feasibility composition only; no credentials enter the page. */
+  experimentalMedia?: { bundle: string; handle(peerId: string, request: MediaRequest, ownsCapture: () => boolean): Promise<unknown>; revoke(peerId: string): Promise<void> };
+}
 const PROTOCOL = "zoom.attachment.v1", OUTPUT_BYTES = 8 * 1024 * 1024, MAX_CLOCK_AHEAD = 1024;
 const same = (a: Attachment | null, b: Attachment) => a?.id === b.id && a.revision === b.revision;
 
@@ -35,6 +40,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
     const text = await readFile(new URL(file, import.meta.url), "utf8").catch(error => { if (error.code !== "ENOENT") throw error; return ""; });
     assets.set(path, { type: `${type}; charset=utf-8`, text });
   }
+  if (options.experimentalMedia) assets.set("/media-lab.js", { type: "text/javascript; charset=utf-8", text: options.experimentalMedia.bundle });
   let origin = "", host = "", closing = false, revision = 0;
   let capture: CaptureLease = { revision: 0, owner: null };
   const attached = new Map<WebSocket, Attachment>();
@@ -48,7 +54,9 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
     try { send(socket, wire.reply(request, body, error)); } catch { socket.terminate(); }
   }
   function changeCapture(owner: Attachment | null) {
+    const previous = capture.owner;
     capture = { revision: capture.revision + 1, owner };
+    if (previous) void options.experimentalMedia?.revoke(previous.id).catch(() => {});
     try {
       const event = { ...wire.request({ version: 1, event: "capture", capture }), kind: "control.event" };
       for (const socket of attached.keys()) send(socket, event);
@@ -85,12 +93,13 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
   sockets.on("connection", socket => {
     socket.on("error", () => {});
     const idle = setTimeout(() => socket.terminate(), timeout);
-    let identity: { nodeId: string; incarnation: string } | undefined, lamport = 0;
+    let identity: { nodeId: string; incarnation: string } | undefined, lamport = 0, mediaPending = 0;
     socket.once("close", () => {
       clearTimeout(idle);
       const ref = attached.get(socket); attached.delete(socket);
       // A delayed close from a superseded capture owner cannot release its successor.
       if (ref && same(capture.owner, ref)) changeCapture(null);
+      else if (ref) void options.experimentalMedia?.revoke(ref.id).catch(() => {});
     });
     socket.on("message", (data, binary) => {
       let packet: Envelope;
@@ -114,7 +123,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
       idle.refresh();
       try {
         const body = packet.body as Record<string, unknown>;
-        if (body.version !== 1 || !fields(body, ["version", "action", "token", "attachment", "operation", "after", "limit", "captureRevision"])) throw new Error("INVALID_REQUEST");
+        if (body.version !== 1 || !fields(body, ["version", "action", "token", "attachment", "operation", "after", "limit", "captureRevision", "media"])) throw new Error("INVALID_REQUEST");
         let result: Record<string, unknown>;
         const ref = attached.get(socket);
         if (!ref) {
@@ -129,6 +138,16 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
             const limit = body.limit ?? 16;
             if (!Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 200) throw new Error("INVALID_CURSOR");
             result = { view: session.view(body.after as number | undefined, Math.min(limit as number, 16)), capture };
+          } else if (body.action === "media") {
+            if (!options.experimentalMedia || !record(body.media) || typeof body.media.action !== "string") throw new Error("MEDIA_DISABLED");
+            if (mediaPending >= 2) throw new Error("MEDIA_BUSY");
+            mediaPending++;
+            const owns = () => !closing && attached.get(socket) === ref && same(capture.owner, ref);
+            void options.experimentalMedia.handle(ref.id, body.media as MediaRequest, owns).then(
+              media => { if (attached.get(socket) === ref) reply(socket, packet, { media, capture }); },
+              error => { const code = error instanceof Error && /^[A-Z_]{1,64}$/.test(error.message) ? error.message : "MEDIA_UNAVAILABLE"; reply(socket, packet, null, { code, message: code }); },
+            ).finally(() => { mediaPending--; });
+            return;
           } else if (body.action === "submit") result = { commandId: session.submit(body.operation as Operation), capture };
           else if (body.action === "capture.claim" || body.action === "capture.release") {
             if (body.captureRevision !== capture.revision) throw new Error("STALE_CAPTURE");

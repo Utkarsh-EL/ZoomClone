@@ -36,10 +36,10 @@ Files: `media/room.ts`, `tests/media-room.test.ts`, package test command and Typ
 
 Files: `services/media/`, `media/kernel-client.ts`, `client/media-lab.js`, experimental additions to browser attachment and tests, `scripts/media-build.ts`.
 
-- [ ] Verify attachment media is absent by default and invalidated peers cannot publish; implement opt-in bounded async bridge and capture cleanup.
-- [ ] Implement private stamped/capability-protected mediasoup control, per-room fences, producer bounds and epoch reporting; build container and browser bundle.
-- [ ] Exercise two real Chromium contexts against SQL/runtime authorization, including denied camera permission, canceled display picker, display track ended, lease replacement, SFU crash/restart and independent chat.
-- [ ] Verify received audio bytes and decoded video frames in both browsers; commit verified increment.
+- [x] Verify attachment media is absent by default and invalidated peers cannot publish; implement opt-in bounded async bridge and capture cleanup.
+- [x] Implement private stamped/capability-protected mediasoup control, per-room fences, producer bounds and epoch reporting; build container and browser bundle.
+- [x] Exercise two real Chromium contexts against SQL/runtime authorization, including denied camera permission, canceled display picker, display track ended, lease replacement, SFU crash/restart and independent chat.
+- [x] Verify received audio bytes and decoded video frames in both browsers; commit verified increment.
 
 ### Task 3: Evidence and continuation
 
@@ -53,3 +53,7 @@ Existing handoff delegates implementation judgment, tools and verified commits. 
 Interfaces: Task 2 consumes Task 1's `MediaRoom` and supplies an effect client. Task 3 verifies their integration. Media effects remain transient and never enqueue or replay domain commands automatically.
 
 Task 1 complete: 3 adapter tests failed with the unimplemented adapter, then passed. Default suite 78/78 and typecheck passed. Revocations bypass ordinary admission so a full queue cannot drop cleanup. Container dependency build also succeeded; native transport feasibility is still pending.
+
+Task 2 complete: `npm run test:media` passed with two distinct native Chromium processes, real SQL/helper/runtime authorization, inbound audio bytes/decoded camera and display frames, native permission denial/dialog rejection/source-ended release, stale grant rejection, server and local lease revocation, SFU crash with successful concurrent chat, explicit transport reconstruction/new epoch, unchanged identity/commands/revision zero, and stopped-runtime refusal. Native body 24.85s, owned storage lab `zoom-storage-b4e2faf1`. Default 86/86, existing native participant UI 1/1 and typecheck passed. The kernel image built successfully.
+
+Observed failures and fixes: DevTools does not accept top-level await in ordinary evaluation (use dynamic import continuation); current-tab dialog selection differs from selected-tab capture (test each native path explicitly); esbuild ancestor reads require elevation in this sandbox. Compressed renewal scheduling exposed explicit pre-effect NOT_READY; the adapter client retries only that rejection with a bound and jitter (RED→GREEN). The harness uses existing production-default 500ms renewal/2000ms readiness, with no production scheduler changes. Compose health can observe the temporary initialization server; the harness now probes the published SQL TCP path before migrations, without replaying any migration or domain command. Explicit stop during pending permission and repeated revocation were reproduced RED→GREEN and fixed with per-source attempts and coalesced cleanup.

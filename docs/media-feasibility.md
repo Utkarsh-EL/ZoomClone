@@ -1,0 +1,29 @@
+# Bounded capture/SFU feasibility
+
+This opt-in harness continues `cbc3a47`. It connects two real Chromium processes to a mediasoup worker in an owned Linux container, using PostgreSQL, three real Raft helpers, a registered production runtime and two durable participant sessions. The normal participant page still exposes logical capture/share controls; full media UI and executable deployment integration remain follow-up work.
+
+Run with Docker Desktop running, Node >=24.16, Go and a Chromium installation:
+
+```powershell
+npm ci
+docker build --file services/media/Dockerfile --tag zoomclone-media-feasibility:3.32.2 .
+npm run test:media
+```
+
+Set `ZOOM_BROWSER_EXECUTABLE` for a nonstandard Chromium path and `ZOOM_MEDIA_EVIDENCE` to select an evidence directory (default `.local/media-evidence`). The test uses native fake camera/microphone devices and Chromium selection/rejection flags. It captures a real browser tab with `getDisplayMedia`; no capture API is replaced. Audio is received and measured but playback is muted. It is process-level localhost evidence, not a physical-device, audible-playback or school-network test.
+
+The runner allocates a unique PostgreSQL lab and media container, publishes loopback control and one bounded UDP/TCP media port, and cleans up its containers/helpers/browsers in `finally`. Database volumes and private manifests/journals remain under the existing StorageLab retention policy. Credentials, attachment URLs and ICE/DTLS parameters are excluded from checked evidence. The base image, server/client packages and lockfiles are pinned. Browser bundling may require elevation on Windows when esbuild cannot read ancestor directories in the sandbox.
+
+The in-process `BrowserOptions.experimentalMedia` bridge supplies the bundled module and media adapter only to the feasibility attachments. Every tab keeps its socket-bound attachment ID. At most two async media requests per attachment and sixteen ordinary room requests can be outstanding. New media controls always call `MeetingStore.read` with the runtime's current `RuntimeAuthority` and the session's private participant credential; a retained inbox or administrative observation cannot authorize media. The SQL read finishes before the SFU effect begins. No schema, Raft version, readiness, domain retry or runtime-route provisioning rule changes.
+
+`MediaRoom` serializes fresh authorization, current-state reconciliation and effects. Reconciliation coalesces existing SQL media intentions by reading current holder/grant version rather than replaying an old intention. It closes an obsolete screen before a successor can publish. Screen publication binds participant, original committed share request and grant version; all publication also requires the current local capture lease. The kernel independently enforces its installed owner/incarnation fence, current grant and one screen producer. Its capability-protected stamped endpoint is private to the host adapter; it is not a browser-facing authorization service. Effects and fences are transient. A restarted worker accepts no media work until the adapter supplies a fresh SQL-authorized reconciliation.
+
+Lease replacement/disconnect schedules server cleanup and stops browser tracks, including permission results arriving late. It does not release the participant's shared SQL grant, because another tab of that same participant may now own capture. Denied/canceled permission retains no track and makes no domain command; the existing grant can be retried or explicitly released. A browser-generated display `ended` event submits one exact `release-share` through the existing ClientSession. Its accepted ID is retained; a failed acceptance marks uncertainty and is never resubmitted automatically. An explicit stop also invalidates pending permission results.
+
+Media retries only explicit `NOT_READY` rejections, which occur before any effect. They use fifteen bounded 15–60ms jittered waits. Timeouts and other uncertain effects do not retry. SFU failure marks media unavailable while chat continues on the independent runtime path. Explicit `MediaLab.reconnect()` recreates transports under fresh authorization using still-live local tracks; it neither reacquires permission nor joins again. The SFU incarnation changes, and old producers are not reused. Automatic reconnect supervision and finished product status/controls are deferred.
+
+The native stop test closes the selected source tab, causing Chromium itself to end its display track. This verifies the same `ended` handling used by the browser's Stop sharing control; the toolbar button itself is not automated. Cancellation uses Chromium's current-tab dialog rejection flag. Unit regressions additionally cover late permission completion, explicit stop during a pending permission request, and exact-once release.
+
+Remaining acceptance includes full executable/participant media integration, mute/camera signaling, automatic bounded reconnect/reconciliation, persisted media effect observations, runtime-takeover/media isolation races, physical devices/playback, reachable advertised addresses beyond loopback, TURN and school-network preflight. Topic/subscription eligibility remains separate protocol work; revision zero stays unfiltered.
+
+Primary implementation references: [mediasoup signaling and paused consumers](https://mediasoup.org/documentation/v3/communication-between-client-and-server/), [transport/listen APIs](https://mediasoup.org/documentation/v3/mediasoup/api/), [installation requirements](https://mediasoup.org/documentation/v3/mediasoup/installation/), [Chromium browser permissions](https://chromedevtools.github.io/devtools-protocol/tot/Browser/) and [Chromium capture automation switches](https://github.com/chromium/chromium/blob/main/chrome/common/chrome_switches.h).

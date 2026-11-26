@@ -8,20 +8,20 @@ import { request } from "node:http";
 import { connect as connectTCP } from "node:net";
 import { test } from "node:test";
 import WebSocket from "ws";
-import { serveBrowserAttachment } from "../client/browser-attachment.ts";
+import { serveBrowserAttachment, type BrowserOptions } from "../client/browser-attachment.ts";
 import { ClientSession } from "../client/client-session.ts";
 import { SessionJournal } from "../client/session-journal.ts";
 import { ControlWire } from "../coordination/wire.ts";
 import { emptyState } from "../storage/engine.ts";
 import { startParticipant } from "../client/participant-agent.ts";
 
-async function fixture(timeoutMs = 2000, maxClients = 8) {
+async function fixture(timeoutMs = 2000, maxClients = 8, experimentalMedia?: BrowserOptions["experimentalMedia"]) {
   const root = await mkdtemp(join(tmpdir(), "zoom-attachment-"));
   const target = { clusterId: randomUUID(), meetingId: randomUUID(), name: "Alice" };
   const journal = SessionJournal.open(join(root, "session.sqlite"), target);
   const session = new ClientSession(journal, async () => { throw new Error("OFFLINE"); });
   const wire = new ControlWire({ clusterId: target.clusterId, nodeId: journal.credential().participantId, incarnation: randomUUID() });
-  const server = await serveBrowserAttachment(session, { address: "127.0.0.1:0", wire, timeoutMs, maxClients });
+  const server = await serveBrowserAttachment(session, { address: "127.0.0.1:0", wire, timeoutMs, maxClients, experimentalMedia });
   const token = new URL(server.url).hash.slice(1), clients: WebSocket[] = [];
   async function connect(headers: Record<string, string> = { Origin: server.origin }) {
     const socket = new WebSocket(server.origin.replace("http:", "ws:") + "/v1/attachment", "zoom.attachment.v1", { headers });
@@ -71,6 +71,7 @@ test("attachment requires exact Host/Origin, token and protocol before exposing 
       assert.equal((await asset.text()).includes(f.token), false);
     }
     assert.equal(await httpStatus(f.server.origin + "/../session.sqlite"), 404);
+    assert.equal(await httpStatus(f.server.origin + "/media-lab.js"), 404);
     assert.equal(await httpStatus(f.server.origin + "/", { Host: "evil.example" }), 403);
     assert.equal(await httpStatus(f.server.origin + "/", { Origin: "null" }), 403);
     for (const headers of [{}, { Origin: "null" }, { Origin: "https://evil.example" }, { Origin: f.server.origin, Host: "evil.example" }] as Record<string, string>[]) {
@@ -84,6 +85,22 @@ test("attachment requires exact Host/Origin, token and protocol before exposing 
     assert.equal((await good.call("view")).body.view.participantId, f.session.view().participantId);
     assert.equal(JSON.stringify((await good.call("view")).body).includes(f.journal.credential().secret), false);
     await assert.rejects(serveBrowserAttachment(f.session, { address: "0.0.0.0:0" }), /ADDRESS/);
+  } finally { await f.close(); }
+});
+
+test("experimental media binds the socket attachment, current lease and revocation", async () => {
+  const revoked: string[] = [], seen: boolean[] = [];
+  const f = await fixture(2000, 8, { bundle: "export {};", handle: async (_id, _request, owns) => { seen.push(owns()); return { epoch: "test", value: "ok" }; }, revoke: async id => { revoked.push(id); } });
+  try {
+    const a = await f.connect(), first = await a.attach();
+    assert.equal((await a.call("media", { media: { action: "list" } })).body.media.value, "ok");
+    const claim = await a.call("capture.claim", { captureRevision: 0 });
+    await a.call("media", { media: { action: "open" } });
+    const b = await f.connect(); await b.attach();
+    await b.call("capture.claim", { captureRevision: claim.body.capture.revision });
+    assert.ok(revoked.includes(first.body.attachment.id));
+    await a.call("media", { media: { action: "produce" } });
+    assert.deepEqual(seen, [false, true, false]);
   } finally { await f.close(); }
 });
 

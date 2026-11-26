@@ -51,3 +51,12 @@ test("media admission is bounded and fresh authorization observes generation cha
   f.snapshot.phase = "RECOVERING";
   await assert.rejects(f.room.handle(f.context, { action: "open" }), /FENCED/);
 });
+test("repeated revocation coalesces while a full media queue drains", async () => {
+  const f = fixture(); let release!: () => void; const effects: string[] = [];
+  const room = new MediaRoom(async r => { effects.push(r.action); if (r.action === "sync") await new Promise<void>(resolve => { release = resolve; }); return {}; });
+  const work = room.handle(f.context, { action: "list" });
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  const cleanup = Array.from({ length: 40 }, () => room.revoke(f.context.peerId));
+  release(); await work; await Promise.all(cleanup);
+  assert.equal(effects.filter(action => action === "closePeer").length, 1);
+});
