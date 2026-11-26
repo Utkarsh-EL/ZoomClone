@@ -82,6 +82,8 @@ export class BrowserAttachment extends EventTarget {
   }
 
   view(after = 0, limit = 16) { return this.#call("view", { after, limit }); }
+  groups(afterGroupId = '', limit = 16) { return this.#call('groups', { afterGroupId, limit }); }
+  groupHistory(groupId, after = 0, limit = 16) { return this.#call('group-history', { groupId, after, limit }); }
   // A failed submit can already be durable. Reattach and inspect commands;
   // never automatically resubmit an operation after uncertainty.
   submit(operation) { return this.#call("submit", { operation }); }

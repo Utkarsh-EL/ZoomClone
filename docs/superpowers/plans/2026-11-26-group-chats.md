@@ -61,9 +61,9 @@ Group operations: `group-create {name}`, `group-invite {groupId, participantId}`
 
 **Interfaces:** Shared submit accepts the same `GroupOperation`; add bounded group/catalog views to local attachment and CLI, using the existing ClientSession rather than new identities/transports. UI displays meeting chat plus joined groups and addressed invitations; create/invite/accept/send/leave use the shared uncertainty guard and expose original outcomes.
 
-- [ ] RED focused model/adapter tests, then implement accessible group selection, earlier-history paging, participant invitation, explicit group leave and retained-local-history status. Explain that joining shares earlier history and invites do not admit recipients until accepted. Group leave never invokes meeting leave, capture release or playback changes. Drafts clear only after durable admission; uncertain submission retains its original identity.
-- [ ] Browser acceptance: three independent member sessions and one nonmember, create/invite/join, earlier message despite advanced meeting cursor, one publisher/multiple recipients, leave/no subsequent access, reconnect and shared CLI progress. Inspect nonmember payloads, not just hidden UI. Run default/typecheck plus real process and native browser/media acceptance once at the integration gate; record physical-device/deployment limits.
-- [ ] Review, commit, update handoff/README with actual supported flow and remaining scope. No push, merge or deployment.
+- [x] RED focused model/adapter tests, then implement accessible group selection, earlier-history paging, participant invitation, explicit group leave and retained-local-history status. Explain that joining shares earlier history and invites do not admit recipients until accepted. Group leave never invokes meeting leave, capture release or playback changes. Drafts clear only after durable admission; uncertain submission retains its original identity.
+- [x] Browser acceptance: three independent member sessions and one nonmember, create/invite/join, earlier message despite advanced meeting cursor, one publisher/multiple recipients, leave/no subsequent access, reconnect and shared CLI progress. Inspect nonmember payloads, not just hidden UI. Run default/typecheck plus real process and native browser/media acceptance once at the integration gate; record physical-device/deployment limits.
+- [x] Review, commit, update handoff/README with actual supported flow and remaining scope. No push, merge or deployment.
 
 ## Execution record
 

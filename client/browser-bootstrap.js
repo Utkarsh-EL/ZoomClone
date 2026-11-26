@@ -1,5 +1,6 @@
 import { BrowserAttachment, pollIntervalMs, mediaEnabled } from "/attachment.js";
 import { ParticipantModel } from "/participant-model.js";
+import { mountGroups } from "/group-controls.js";
 
 const $ = id => document.getElementById(id);
 const text = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
@@ -11,7 +12,8 @@ function list(id, data, render) {
   if (signatures.get(id) === signature) return false;
   signatures.set(id, signature); $(id).replaceChildren(...render()); return true;
 }
-const labels = { join: "Join meeting", chat: "Send message", "request-share": "Request share turn", "release-share": "Release share turn", leave: "Leave meeting" };
+const labels = { join: "Join meeting", chat: "Send message", "request-share": "Request share turn", "release-share": "Release share turn", leave: "Leave meeting",
+  'group-create': 'Create private group', 'group-invite': 'Invite to group', 'group-join': 'Accept group invitation', 'group-chat': 'Send group message', 'group-leave': 'Leave group' };
 
 try {
   const attachment = await BrowserAttachment.connect();
@@ -22,6 +24,7 @@ try {
   });
   let timer, stopped = false, wasFollowing = false, participantMedia;
   const participantName = id => model.state?.members[id]?.name ?? (id === model.view?.participantId ? model.view.name : `Participant ${String(id).slice(0, 8)}`);
+  const groups = mountGroups(attachment, model, participantName);
   function render() {
     const v = model.view, state = model.state;
     text("attachment-status", model.attached ? "attached" : "closed");
@@ -153,9 +156,10 @@ try {
   $("reattach").addEventListener("click", () => location.reload());
   async function poll() {
     await model.refresh();
+    await groups.refresh();
     if (!stopped && model.attached) timer = setTimeout(poll, pollIntervalMs);
   }
-  addEventListener("pagehide", () => { stopped = true; clearTimeout(timer); participantMedia?.dispose(); model.dispose(); attachment.close(); }, { once: true });
+  addEventListener("pagehide", () => { stopped = true; clearTimeout(timer); groups.dispose(); participantMedia?.dispose(); model.dispose(); attachment.close(); }, { once: true });
   render(); await poll();
   if (mediaEnabled && !stopped) {
     const [{ MediaLab }, { ParticipantMedia }] = await Promise.all([import('/media-lab.js'), import('/participant-media.js')]);

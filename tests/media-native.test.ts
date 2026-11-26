@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join } from "node:path";
 import { test } from "node:test";
 import { StorageLab } from "../scripts/storage-lab.ts";
@@ -18,11 +17,9 @@ import { tcpCut } from "./fixtures/tcp-cut.ts";
 import { ParticipantConnection } from "../client/participant-transport.ts";
 import { ownerFor } from "../coordination/recovery-controller.ts";
 import type { MetadataState } from "../coordination/helper-client.ts";
+import { LeaderRoute } from "../coordination/helper-route.ts";
+import { localPort } from "../scripts/local-port.ts";
 
-async function port() {
-  const server = createServer(); await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return port;
-}
 test("two native browsers exchange SFU capture under SQL/runtime and local lease fences, then rebuild after SFU crash", { timeout: 180000 }, async () => {
   const storage = new StorageLab(); await storage.start();
   const clusterId = storage.clusterId, meetingId = randomUUID();
@@ -47,8 +44,9 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     const runtimeURL = new URL(storage.url); runtimeURL.username = "zoom_runtime"; runtimeURL.password = runtimePassword;
     pool = createPool(runtimeURL.href); const store = new MeetingStore(db, pool);
     helpers = await CoordinatorLab.create(3, clusterId);
-    const routes = helpers.nodes.map(n => ({ helperId: n.id, address: n.address })), helper = helpers.connection(await helpers.leader());
-    const controlPort = await port(), mediaPort = await port();
+    await helpers.leader();
+    const routes = helpers.nodes.map(n => ({ helperId: n.id, address: n.address })), helper = new LeaderRoute(helpers.nodes.map(n => helpers!.connection(n)));
+    const controlPort = await localPort(), mediaPort = await localPort(true);
     const runtimeId = randomUUID(), runtimeIncarnation = randomUUID(), successorId = randomUUID(), successorIncarnation = randomUUID();
     const runtimeToken = randomBytes(32).toString("hex"), participantToken = randomBytes(32).toString("hex");
     for (const route of routes) cuts.push(await tcpCut(route.address));
@@ -72,7 +70,8 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     const nextRemote = new RemoteRuntime({ clusterId, runtimeId: successorId, incarnation: successorIncarnation, address: successor.address, token: runtimeToken, identity, timeoutMs: 800 });
     await until("registered media runtime", async () => await remote.available() ? true : undefined);
     await helper.call("apply", { command: { id: randomUUID(), kind: "reserve", meetingId, code: "media-" + meetingId.slice(0, 8) } });
-    const controller = new RecoveryController(helper, store, { clusterId, suspicionMs: 1500 });
+    let controllerLeader = await helpers.leader();
+    let controller = new RecoveryController(helpers.connection(controllerLeader), store, { clusterId, suspicionMs: 1500 });
     await until("active media meeting", async () => await controller.tick(meetingId, await availableRuntimes([remote])) === "READY" ? true : undefined);
     storage.docker(["run", "--detach", "--name", name, "--label", `org.zoomclone.lab=${name}`, "--publish", `127.0.0.1:${controlPort}:8080/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/tcp`, "--publish", `127.0.0.1:${mediaPort}:${mediaPort}/udp`,
       ...["MEDIA_CLUSTER_ID", "MEDIA_NODE_ID", "MEDIA_MEETING_ID", "MEDIA_CALLERS", "MEDIA_TOKEN", "MEDIA_PORT"].flatMap(key => ["--env", key]), "zoomclone-media-feasibility:3.32.2"],
@@ -208,6 +207,11 @@ test("two native browsers exchange SFU capture under SQL/runtime and local lease
     // Old runtime retains SQL reachability; the successor retains SQL/quorum.
     for (const cut of cuts.slice(0, 3)) cut.cut(); successorMedia.cut();
     await until("takeover while old runtime and SFU are isolated", async () => {
+      const currentLeader = await helpers!.leader();
+      if (currentLeader.id !== controllerLeader.id || currentLeader.incarnation !== controllerLeader.incarnation) {
+        controllerLeader = currentLeader;
+        controller = new RecoveryController(helpers!.connection(currentLeader), store, { clusterId, suspicionMs: 1500 });
+      }
       const result = await controller.tick(meetingId, await availableRuntimes([nextRemote]));
       return result === "READY" && (await store.observe(meetingId)).generation === 2 ? true : undefined;
     }, 20000);

@@ -8,8 +8,8 @@
 
 ## Completion checklist
 
-- [ ] Fenced SQL private groups/history, one supported protocol and transactional shared-journal upgrade, preserving original commands, credentials, outcomes and revision-zero meeting replay.
-- [ ] Browser/CLI create, invite, accept, send, earlier history and leave; multiple member subscribers and nonmember payload exclusion.
+- [x] Fenced SQL private groups/history, one supported protocol and transactional shared-journal upgrade, preserving original commands, credentials, outcomes and revision-zero meeting replay.
+- [x] Browser/CLI create, invite, accept, send, earlier history and leave; multiple member subscribers and nonmember payload exclusion.
 - [ ] Repeatable single-computer start, readiness/status and bounded shutdown with retained state and owned-resource cleanup.
 - [ ] Media, meeting chat and private-group controls work together; participant restart and runtime takeover recover without invented commands or authority.
 - [ ] Relevant default/typecheck, real PostgreSQL/recovery/process, browser/media and coordinator/consensus regression suites pass; substantial changes independently reviewed and findings resolved.
@@ -26,4 +26,5 @@
 
 - Inspection: base `ac0e70f`, clean `milestone-5`; pure group engine and existing supervised media already complete. Existing plans/spec/handoff reviewed; superseded subscription plan will not execute. Docker 29.8.2 and Go 1.26.1 available with required sandbox elevation; Node 26.1.0 present.
 - Milestone 1 complete: SQL/protocol/journal integration; default 148/148 and typecheck; real storage16/16; recovery/runtime/process19/19 at its run; independent review's two minor gaps addressed and verified. See current handoff for exact evidence and limitations.
-- Current: milestone 2, usable group browser controls and integration acceptance. Implementation remains inline; high analysis retained through storage/recovery, later routine UI work uses ordinary focused reasoning.
+- Milestone 2 complete: group UI5/5, default153/153, typecheck, four-session native group1/1, existing browser1/1, native media1/1. Independent Important destination-switch issue fixed RED→GREEN; no deferred findings. See handoff for diagnosed harness/readiness/Windows-port failures and evidence.
+- Current: milestone 3, persistent local demo orchestration. Initial real lifecycle acceptance passed; harden authorization/status/cleanup then independent review. Milestone4 broad regressions and actual launch rehearsal remain.

@@ -31,6 +31,7 @@
       <button id="leave-submit" class="danger">Confirm leave</button><button id="leave-cancel">Stay in meeting</button>
     </section>
     <div class="workspace">
+      <div class="conversations">
       <section class="conversation" aria-labelledby="conversation-title">
         <div class="section-heading"><h2 id="conversation-title">Conversation</h2><span class="muted">All meeting events</span></div>
         <nav class="history-tools" aria-label="History pages">
@@ -44,6 +45,23 @@
           <div class="composer-footer"><span id="composer-help" class="muted">Messages are saved by your agent before delivery.</span><button type="submit" id="send" class="primary" disabled>Send message</button></div>
         </form>
       </section>
+      <section id="group-section" class="conversation" aria-labelledby="group-title">
+        <div class="section-heading"><h2 id="group-title">Private groups</h2></div>
+        <div class="group-controls">
+          <p class="muted small">Joining subscribes you to a group; leaving stops future delivery. Any member can invite a meeting participant.</p>
+          <form id="group-create-form"><label for="group-name">New group name</label><div class="inline-form"><input id="group-name" autocomplete="off" placeholder="e.g. Study group"><button id="group-create" type="submit" disabled>Create group</button></div></form>
+          <label for="group-select">Your groups and invitations</label><select id="group-select" disabled><option>No groups or invitations yet</option></select>
+          <div class="actions"><button id="groups-previous" disabled>Previous groups</button><button id="groups-next" disabled>More groups</button></div>
+          <p id="group-status" class="muted small" role="status"></p>
+          <div class="actions"><button id="group-join" hidden>Accept invitation</button><button id="group-leave" hidden>Leave group</button></div>
+          <form id="group-invite-form"><label for="group-invite-person">Invite a meeting participant</label><div class="inline-form"><select id="group-invite-person" disabled></select><button id="group-invite" type="submit" disabled>Invite</button></div></form>
+          <p id="group-error" class="notice small" role="alert" hidden></p>
+        </div>
+        <nav class="history-tools" aria-label="Group history pages"><button id="group-older" disabled>Older</button><button id="group-newer" disabled>Newer</button><button id="group-latest" disabled>Latest</button><span id="group-page-status" class="muted small" role="status"></span></nav>
+        <ol id="group-history" aria-label="Private group history" tabindex="0"><li class="empty">No downloaded group messages yet.</li></ol>
+        <form id="group-form"><label id="group-message-label" for="group-input">Message the selected group</label><textarea id="group-input" rows="3" aria-describedby="group-help" disabled></textarea><div class="composer-footer"><span id="group-help" class="muted small">Only group members receive these messages. Downloaded history remains after leaving.</span><button id="group-send" type="submit" class="primary" disabled>Send to group</button></div></form>
+      </section>
+      </div>
       <aside aria-label="Participants and sharing">
         <section aria-labelledby="roster-title"><div class="section-heading"><h2 id="roster-title">Participants</h2><span id="roster-count" class="muted"></span></div><ul id="roster"><li class="empty">Waiting for a meeting snapshot.</li></ul></section>
         <section aria-labelledby="share-title">

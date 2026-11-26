@@ -35,6 +35,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
     ["/", "participant.html", "text/html"], ["/participant.css", "participant.css", "text/css"],
     ["/attachment.js", "browser-attachment.js", "text/javascript"], ["/bootstrap.js", "browser-bootstrap.js", "text/javascript"],
     ["/participant-model.js", "participant-model.js", "text/javascript"],
+    ["/group-model.js", "group-model.js", "text/javascript"], ["/group-controls.js", "group-controls.js", "text/javascript"],
     ["/participant-media.js", "participant-media.js", "text/javascript"],
   ]) {
     // The protocol-only service can also be used without the optional page adapter.
@@ -124,7 +125,7 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
       idle.refresh();
       try {
         const body = packet.body as Record<string, unknown>;
-        if (body.version !== 1 || !fields(body, ["version", "action", "token", "attachment", "operation", "after", "limit", "captureRevision", "media"])) throw new Error("INVALID_REQUEST");
+        if (body.version !== 1 || !fields(body, ["version", "action", "token", "attachment", "operation", "after", "limit", "captureRevision", "media", "groupId", "afterGroupId"])) throw new Error("INVALID_REQUEST");
         let result: Record<string, unknown>;
         const ref = attached.get(socket);
         if (!ref) {
@@ -139,6 +140,10 @@ export async function serveBrowserAttachment(session: ClientSession, options: Br
             const limit = body.limit ?? 16;
             if (!Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 200) throw new Error("INVALID_CURSOR");
             result = { view: session.view(body.after as number | undefined, Math.min(limit as number, 16)), capture };
+          } else if (body.action === "groups") {
+            result = { catalog: session.journal.groupsView(body.afterGroupId as string | undefined, body.limit as number | undefined), capture };
+          } else if (body.action === "group-history") {
+            result = { history: session.journal.groupView(body.groupId as string, body.after as number | undefined, body.limit as number | undefined), capture };
           } else if (body.action === "media") {
             if (!options.experimentalMedia || !record(body.media) || typeof body.media.action !== "string") throw new Error("MEDIA_DISABLED");
             if (mediaPending >= 2) throw new Error("MEDIA_BUSY");

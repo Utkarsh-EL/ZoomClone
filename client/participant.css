@@ -21,6 +21,18 @@ body { margin: 0; }
 ::selection { background: #c4ddcc; color: #173d2f; }
 a { color: var(--accent); text-underline-offset: .2em; }
 button, textarea { font: inherit; }
+input, select { font: inherit; width: 100%; min-width: 0; min-height: 44px; padding: .5rem .65rem; border: 1px solid #87978d; border-radius: 6px; background: var(--surface); color: var(--ink); }
+.conversations { display: grid; gap: 1.5rem; min-width: 0; }
+.group-controls { padding: 0 1.5rem 1rem; }
+.group-controls form, .group-controls > label { margin-top: 1rem; }
+.group-controls > p { margin-top: .75rem; }
+.inline-form { display: flex; gap: .5rem; align-items: start; }
+.inline-form button { flex-shrink: 0; }
+#group-form { padding: 1rem 1.5rem 1.25rem; border-top: 1px solid var(--line); }
+#group-history { height: 20rem; overflow-y: auto; overscroll-behavior: contain; list-style: none; padding: .75rem 1.5rem; margin: 0; }
+#group-history li { padding-block: .65rem; overflow-wrap: anywhere; }
+#group-history p { margin-top: .25rem; white-space: pre-wrap; max-width: 72ch; }
+#group-history .system-event { color: var(--muted); font-size: .875rem; border-bottom: 1px solid var(--line); }
 button { border: 1px solid #87978d; background: var(--surface); color: var(--ink); border-radius: 6px; padding: .5rem .8rem; min-height: 44px; cursor: pointer; transition: background-color 150ms ease-out; }
 button:hover:enabled { background: var(--hover); }
 button:active:enabled { background: #d3e2d7; }
@@ -107,6 +119,8 @@ dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
   aside section + section { margin: 0; padding: 0; border: 0; }
 }
 @media (max-width: 540px) {
+  .group-controls, #group-form, #group-history { padding-inline: 1rem; }
+  .inline-form { flex-wrap: wrap; }
   .meeting-header, .connection-bar, main { padding-inline: 1rem; }
   .meeting-header { align-items: start; gap: .75rem; }
   .meeting-header button { max-width: 8rem; }
