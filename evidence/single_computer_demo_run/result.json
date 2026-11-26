@@ -1,0 +1,231 @@
+{
+  "date": "2026-11-26",
+  "base": "ac0e70f",
+  "groupIntegrationCommit": "2fa90c8",
+  "groupControlsCommit": "1d2bc7c",
+  "scope": "Repeatable Windows single-computer assignment demo through actual launcher, independent helper/discovery/runtime/participant processes, PostgreSQL and SFU Docker containers",
+  "verification": [
+    {
+      "command": "npm test",
+      "result": "163/163, no skips"
+    },
+    {
+      "command": "npm run typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "npm run test:runtimes",
+      "result": "21/21: storage7, faults4, private groups5, recovery2, runtime processes2, participant processes1"
+    },
+    {
+      "command": "npm run test:consensus",
+      "result": "full Raft dependency race suite passed (136.423s), helper race suite passed (16.522s), vet/build passed, coordinator process scenario1/1"
+    },
+    {
+      "command": "npm run test:groups",
+      "result": "1/1: four distinct browser sessions, advanced meeting cursor, earlier history, multiple subscribers, nonmember payload exclusion, CLI/reload and leave"
+    },
+    {
+      "command": "npm run test:browser",
+      "result": "1/1: existing participant UI/CLI/uncertainty/release/lease/leave/shutdown regressions"
+    },
+    {
+      "command": "npm run test:media",
+      "result": "1/1 (40.932s): capture/reception/playback, exact screen release, SFU restart, isolation/takeover, old-owner/epoch/local-lease refusal, successor-safe drain"
+    },
+    {
+      "command": "npm run test:demo",
+      "result": "1/1 final (36.415s): auth/Origin/run-ID rejection, unreachable status, actual runtime and participant crash recovery, retained stop/start, missing-journal refusal"
+    },
+    {
+      "command": "npm run demo:rehearse",
+      "result": "1/1 (64.428s): complete actual-launch browser rehearsal, explicit new participant after durable leave, full retained restart and clean final shutdown"
+    },
+    {
+      "command": "historical ac0e70f journal/Database code against upgraded formats",
+      "result": "both rejected; exact original pending command preserved"
+    }
+  ],
+  "independentReviews": [
+    {
+      "scope": "group SQL/protocol/journal",
+      "critical": 0,
+      "important": 0,
+      "minor": 2,
+      "resolution": "future-generation replay rejected RED/GREEN; upgrade inbox/cursor/clock and historical binary coverage strengthened"
+    },
+    {
+      "scope": "group UI and attachment",
+      "critical": 0,
+      "important": 1,
+      "resolution": "pre-navigation destination race reproduced RED/GREEN; synchronous mutation gating and matching history scope"
+    },
+    {
+      "scope": "demo control authorization, ownership and recovery",
+      "critical": 0,
+      "important": 4,
+      "resolution": "read-only journal identity gate, exclusive lock with no stale reclaim, crashed-child restart, async/deadlined/cancellable Docker all implemented and verified; no second independent verdict claimed"
+    }
+  ],
+  "diagnosedFailures": [
+    "Media harness retained a former leader; reads now use existing leader routing while recovery workers remain pinned to the selected leader.",
+    "Compose in-container readiness preceded published PostgreSQL readiness; actual TCP endpoint probe added.",
+    "Runtime readiness can transiently change during renewal; post-leave acceptance retries only NOT_READY and still requires actual GROUP_ACCESS_DENIED.",
+    "Windows TCP/UDP excluded ranges differ; UDP port-zero could repeatedly recycle a TCP-excluded candidate on full restart. Independent random candidates are checked for both binds. Final full retained restart passed.",
+    "Initial demo absent-container matching was case-sensitive; corrected and complete lifecycle passed.",
+    "A cleanup failure could still yield a successful CLI exit; now exits nonzero and ownership records remain held while cleanup is uncertain."
+  ],
+  "rehearsal": {
+    "observedAt": "2026-11-26T19:25:59.225Z",
+    "checks": [
+      {
+        "name": "documented launcher starts actual 3-helper/4-discovery/2-runtime/4-participant processes and provisioned SFU",
+        "value": {
+          "helpers": 3,
+          "discoveryPeers": 4,
+          "runtimes": 2,
+          "media": "listening"
+        }
+      },
+      {
+        "name": "bidirectional microphone bytes and decoded camera frames",
+        "value": [
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 2312,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 3868,
+              "frames": 1
+            }
+          ],
+          [
+            {
+              "kind": "audio",
+              "source": "mic",
+              "bytes": 466,
+              "frames": 0
+            },
+            {
+              "kind": "video",
+              "source": "camera",
+              "bytes": 3090,
+              "frames": 1
+            }
+          ]
+        ]
+      },
+      {
+        "name": "explicit playback control starts browser playback",
+        "value": true
+      },
+      {
+        "name": "meeting chat reaches all four sessions while media flows",
+        "value": true
+      },
+      {
+        "name": "screen display frames received under share grant",
+        "value": [
+          {
+            "kind": "audio",
+            "source": "mic",
+            "bytes": 19031,
+            "frames": 0
+          },
+          {
+            "kind": "video",
+            "source": "camera",
+            "bytes": 89888,
+            "frames": 59
+          },
+          {
+            "kind": "video",
+            "source": "screen",
+            "bytes": 1144,
+            "frames": 1
+          }
+        ]
+      },
+      {
+        "name": "browser-ended display releases exact grant, queue hands off without automatically capturing",
+        "value": true
+      },
+      {
+        "name": "private pub/sub has multiple subscribers, earlier history and nonmember payload exclusion",
+        "value": true
+      },
+      {
+        "name": "actual runtime process crash recovers metadata/SQL/journals and media reception",
+        "value": {
+          "generation": 2,
+          "received": [
+            [
+              {
+                "kind": "audio",
+                "source": "mic",
+                "bytes": 678,
+                "frames": 0
+              },
+              {
+                "kind": "video",
+                "source": "camera",
+                "bytes": 3958,
+                "frames": 1
+              }
+            ],
+            [
+              {
+                "kind": "audio",
+                "source": "mic",
+                "bytes": 777,
+                "frames": 0
+              },
+              {
+                "kind": "video",
+                "source": "camera",
+                "bytes": 3190,
+                "frames": 1
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "name": "group leave stops subsequent delivery and retains earlier downloaded messages",
+        "value": true
+      },
+      {
+        "name": "participant crash/restart preserves identity and deliberate group leave",
+        "value": true
+      },
+      {
+        "name": "explicit return after meeting leave creates a new identity without restoring private membership",
+        "value": true
+      },
+      {
+        "name": "complete shutdown/start retains shared histories, identities and subscriptions",
+        "value": true
+      },
+      {
+        "name": "final shutdown confirms owned resource cleanup and retained volumes",
+        "value": true
+      }
+    ]
+  },
+  "limitations": [
+    "Synthetic Chromium microphone/camera and automated display selection; physical devices and audible output unverified",
+    "Single Windows computer/Docker Desktop; independent-host and TURN deployment unverified",
+    "Abrupt supervisor death leaves a lock requiring ownership recovery; ordinary stop/start and runtime crash recovery are supported",
+    "Default browser auto-open is best effort; printed private URLs are available as fallback. Automated acceptance opens those URLs in native Chromium.",
+    "One runtime crash per start; full stop/start replenishes the spare.",
+    "Single PostgreSQL instance: durable transactional meeting/group data, no PostgreSQL replication claim; Raft replicates coordinator metadata.",
+    "Meeting-code entry, disconnect grace, TURN and internet/independent-host deployment remain unfinished.",
+    "Downloaded or authorized-in-flight group messages cannot be recalled; membership-based privacy is application access control, not end-to-end encryption."
+  ],
+  "cleanup": "Final rehearsal and lifecycle test stopped their owned resources cleanly; journals, Raft state and PostgreSQL volumes retained. No push, merge or deployment."
+}

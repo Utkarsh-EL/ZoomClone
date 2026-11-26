@@ -1,6 +1,6 @@
 # Durable participant sessions and production replay
 
-This checkpoint adds `client/` and the runtime's `/v1/participant` WebSocket gateway. A production participant agent automatically joins, sends domain commands, reconnects to a READY replacement, resolves uncertain outcomes by the original command ID, and replays PostgreSQL events into its local durable inbox. [Current design](superpowers/specs/2026-11-21-distributed-meeting-redesign.md) and [implementation plan](superpowers/plans/2026-11-25-client-session.md).
+The runtime's `/v2/participant` WebSocket gateway serves the shared durable participant session. A production participant agent automatically joins, sends domain commands, reconnects to a READY replacement, resolves uncertain outcomes by the original command ID, and replays PostgreSQL events into its local durable inbox. The [single-computer demo](single-computer-demo.md) supplies current launch controls; the [original session implementation plan](superpowers/plans/2026-11-25-client-session.md) is historical.
 
 ## Durable local state
 
@@ -32,7 +32,7 @@ Add an optional participant listener to protected `ZOOM_RUNTIME_CONFIG` JSON:
 
 Other runtime fields retain the configuration described in [remote runtimes](remote-runtimes.md). Startup reports `participantAddress`; the provisioner also knows the runtime ID/incarnation and token. Both listeners close on shutdown, registration revocation and failed startup.
 
-The gateway uses the runtime's shared stamped version-2 ControlWire envelope, with participant body version 1 and WebSocket subprotocol `zoom.participant.v1`. Upgrade requires a provisioned bearer token and rejects browser Origin headers. Every domain command also authenticates its participant resume secret through MeetingStore. The gateway binds the exact cluster, meeting, generation, runtime, incarnation and attempt, checks RuntimeAuthority, then delegates to the existing fresh SQL transaction/fence. A READY metadata route is an observation, never authorization to bypass SQL.
+The gateway uses the runtime's shared stamped version-2 ControlWire envelope, participant body version 2 and WebSocket subprotocol `zoom.participant.v2`. This is the one supported participant protocol; stop old processes for the coordinated SQL/journal upgrade. Upgrade requires a provisioned bearer token and rejects browser Origin headers. Every domain command also authenticates its participant resume secret through MeetingStore. The gateway binds the exact cluster, meeting, generation, runtime, incarnation and attempt, checks RuntimeAuthority, then delegates to the existing fresh SQL transaction/fence. A READY metadata route is an observation, never authorization to bypass SQL.
 
 Ingress permits at most 128 sockets and 32 active operations by default, one operation per socket, with a 64 KiB frame bound and 1 MiB reply/output bound. Deadlines cover partial HTTP headers, idle upgraded sockets and active requests. Timed-out SQL work retains admission until it settles; socket closure cannot cancel an already committed transaction. The existing blackholed database connection/shutdown limitation remains.
 

@@ -11,7 +11,7 @@
     "test:runtimes": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery --runtimes",
     "test:recovery": "node scripts/coordinator-build.ts && node scripts/storage-check.ts --recovery",
     "test:storage": "node scripts/storage-check.ts",
-    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/group-engine.test.ts tests/group-session.test.ts tests/group-ui.test.js tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts tests/participant-gateway.test.ts tests/browser-attachment.test.ts tests/participant-ui.test.js tests/participant-media.test.js tests/media-room.test.ts tests/media-fence.test.ts tests/media-production.test.ts tests/media-capture.test.js",
+    "test": "node --test tests/logical-clock.test.ts tests/coordinator.test.ts tests/meeting-engine.test.ts tests/group-engine.test.ts tests/group-session.test.ts tests/group-ui.test.js tests/runtime-agent.test.ts tests/runtime-rpc.test.ts tests/discovery.test.ts tests/discovery-rpc.test.ts tests/discovered-helpers.test.ts tests/client-session.test.ts tests/participant-gateway.test.ts tests/browser-attachment.test.ts tests/participant-ui.test.js tests/participant-media.test.js tests/media-room.test.ts tests/media-fence.test.ts tests/media-production.test.ts tests/media-capture.test.js tests/demo-controls.test.ts tests/demo-child.test.ts tests/demo-lock.test.ts tests/demo-journal.test.ts tests/bounded-command.test.ts tests/local-port.test.ts",
     "start:discovery": "node scripts/discovery-peer.ts",
     "start:participant": "node scripts/participant-agent.ts",
     "build:coordinator": "node scripts/coordinator-build.ts",
@@ -20,7 +20,17 @@
     "demo:coordinator": "node scripts/coordinator-scenario.ts",
     "typecheck": "tsc",
     "build:media": "node scripts/media-build.ts",
-    "test:media": "node scripts/coordinator-build.ts && node scripts/media-build.ts && node --test tests/media-native.test.ts"
+    "test:media": "node scripts/coordinator-build.ts && node scripts/media-build.ts && node --test tests/media-native.test.ts",
+    "demo:start": "node scripts/demo.ts start",
+    "demo:status": "node scripts/demo.ts status",
+    "demo:stop": "node scripts/demo.ts stop",
+    "demo:open": "node scripts/demo.ts open",
+    "demo:fail-runtime": "node scripts/demo.ts fail-runtime",
+    "demo:restart-participant": "node scripts/demo.ts restart-participant",
+    "demo:new-participant": "node scripts/demo.ts new-participant",
+    "demo:fail-participant": "node scripts/demo.ts fail-participant",
+    "test:demo": "node --test tests/demo-process.test.ts",
+    "demo:rehearse": "node --test tests/demo-rehearsal.test.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

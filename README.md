@@ -1,6 +1,18 @@
 # ZoomClone
 
-A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and the secured loopback participant UI share one session, with roster, paged history, pending outcomes, share queue and local capture-owner controls. [Production media composition](docs/production-media.md) provides supervised microphone/camera/display/playback through provisioned runtimes/SFUs with fresh SQL authorization. Invite-only group chats support create/invite/accept/send/earlier history/leave with membership-based pub/sub. Local demo orchestration is being verified; meeting-code entry, disconnect grace and broader deployment remain unfinished.
+A local distributed meeting project built around Raft coordinator metadata, PostgreSQL meeting state, one fenced runtime per meeting, and namespaced 128-bit Chord discovery. Durable participant agents join, chat and reconnect/replay over the production WebSocket gateway. CLI and the secured loopback participant UI share one session, with roster, paged history, pending outcomes, share queue and local capture-owner controls. [Production media composition](docs/production-media.md) provides supervised microphone/camera/display/playback through provisioned runtimes/SFUs with fresh SQL authorization. Invite-only group chats support create/invite/accept/send/earlier history/leave with membership-based pub/sub. Meeting-code entry, disconnect grace and broader deployment remain unfinished.
+
+## Single-computer demo
+
+With Node.js, Go, Docker Desktop running and `npm install` completed:
+
+```powershell
+npm run demo:start
+npm run demo:status
+npm run demo:stop
+```
+
+Start opens four participant pages and retains identities/history across stop/start. `npm run demo:fail-runtime` demonstrates automatic takeover; `npm run demo:restart-participant -- Bob` recovers Bob's journal. See the [tested launch and rehearsal procedure](docs/single-computer-demo.md) for media, private pub/sub, fault controls and honest limits. `npm run demo:rehearse` automates the actual process/browser flow with synthetic media devices.
 
 Start with the [current handoff](docs/superpowers/handoffs/2026-11-25-distributed-meeting-redesign.md) for implemented behavior, evidence, limitations, and the exact next action. The [current design](docs/superpowers/specs/2026-11-21-distributed-meeting-redesign.md) describes the intended product.
 

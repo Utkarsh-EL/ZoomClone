@@ -5,6 +5,7 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { projectRoot } from "./coordinator-build.ts";
 import { UUID_PATTERN } from "../coordination/wire.ts";
+export type DockerRunner = (args: string[], env?: Record<string, string>) => Promise<string>;
 
 /** Owns only this Compose project. Shutdown deliberately retains the volume. */
 export class StorageLab {
@@ -65,7 +66,10 @@ export class StorageLab {
     return result.stdout.trim();
   }
   compose(args: string[]): string {
-    return this.docker([
+    return this.docker(this.composeArgs(args));
+  }
+  private composeArgs(args: string[]): string[] {
+    return [
       "compose",
       "--project-name",
       this.project,
@@ -74,12 +78,14 @@ export class StorageLab {
       "-f",
       join(projectRoot, "compose.yaml"),
       ...args,
-    ]);
+    ];
   }
-  async start(): Promise<void> {
+  async start(options: { run?: DockerRunner } = {}): Promise<void> {
+    const docker: DockerRunner = options.run ?? (async (args, env) => this.docker(args, env));
+    const compose = async (args: string[]) => options.run ? docker(this.composeArgs(args)) : this.compose(args);
     if (this.resuming) {
-      this.docker(["volume", "inspect", this.project + "_meeting-data"]);
-      this.compose(["up", "--detach", "--wait", "--wait-timeout", "60"]);
+      await docker(["volume", "inspect", this.project + "_meeting-data"]);
+      await compose(["up", "--detach", "--wait", "--wait-timeout", "60"]);
       return;
     }
     const reservation = createServer();
@@ -108,10 +114,10 @@ export class StorageLab {
       { flag: "wx" },
     );
     try {
-      this.compose(["up", "--detach", "--wait", "--wait-timeout", "60"]);
+      await compose(["up", "--detach", "--wait", "--wait-timeout", "60"]);
     } catch (error) {
       try {
-        this.stop();
+        if (options.run) await this.stopAsync(options.run); else this.stop();
       } catch (cleanup) {
         throw new AggregateError(
           [error, cleanup],
@@ -186,6 +192,17 @@ SQL`;
       this.docker(["rm", "--force", ...holders]);
     }
     this.compose(["down", "--timeout", "5"]);
+  }
+  /** Async bounded runner lets a supervisor continue serving status/stop while
+   * Docker is busy. The ordinary evidence-runner interface stays unchanged. */
+  async stopAsync(run: DockerRunner): Promise<void> {
+    const holders = (await run(["ps", "--all", "--quiet", "--filter", "label=org.zoomclone.lab=" + this.project,
+      "--filter", "label=org.zoomclone.kind=transaction-holder"])).split(/\s+/).filter(Boolean);
+    if (holders.length) {
+      if (!holders.every(id => /^[a-f0-9]{12,64}$/.test(id))) throw new Error("Unexpected container ID");
+      await run(["rm", "--force", ...holders]);
+    }
+    await run(this.composeArgs(["down", "--timeout", "5"]));
   }
 }
 

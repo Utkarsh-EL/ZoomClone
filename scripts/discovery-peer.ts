@@ -8,8 +8,9 @@ try {
   const service = await serveDiscovery({ ...config, incarnation: randomUUID() });
   console.log(JSON.stringify({ event: "discovery.started", clusterId: config.clusterId, nodeId: config.nodeId,
     incarnation: service.node.self.incarnation, id: toHex(service.node.self.id), address: service.address, time: new Date().toISOString() }));
-  const stop = () => { void service.close().catch(() => { process.exitCode = 1; }); };
+  const stop = () => { process.stdin.pause(); void service.close().catch(() => { process.exitCode = 1; }); };
   process.once("SIGINT", stop); process.once("SIGTERM", stop);
+  if (process.env.ZOOM_PARENT_LIFETIME === "stdin") { process.stdin.once("end", stop); process.stdin.resume(); }
 } catch {
   console.error(JSON.stringify({ event: "discovery.failed", code: "STARTUP_FAILED" }));
   process.exitCode = 1;

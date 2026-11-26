@@ -11,8 +11,9 @@ try {
   });
   console.log(JSON.stringify({ event: "runtime.started", clusterId: config.clusterId, runtimeId: config.runtimeId,
     incarnation: runtime.agent.identity.incarnation, address: runtime.address, participantAddress: runtime.participantAddress, time: new Date().toISOString() }));
-  const stop = () => { void runtime.close().catch(() => { process.exitCode = 1; }); };
+  const stop = () => { process.stdin.pause(); void runtime.close().catch(() => { process.exitCode = 1; }); };
   process.once("SIGINT", stop); process.once("SIGTERM", stop);
+  if (process.env.ZOOM_PARENT_LIFETIME === "stdin") { process.stdin.once("end", stop); process.stdin.resume(); }
   await runtime.done;
 } catch {
   console.error(JSON.stringify({ event: "runtime.failed", code: "STARTUP_OR_SCHEDULER_FAILED" }));
